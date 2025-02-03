@@ -1,5 +1,6 @@
 # Modifications by Mihaly Kavasi
 This is an updated version of the Power BI Realistic Load testing tool.
+Code is not complete. This version will not work by itself.
 
 # Version 0.7
 - Added the ability to define the Project Name for the test

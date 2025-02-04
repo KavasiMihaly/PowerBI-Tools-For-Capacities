@@ -53,6 +53,31 @@
             padding: 1rem;
         }
 
+        .metrics-panel {
+            background: #fff;
+            padding: 1rem;
+            border-radius: 8px;
+            margin: 1rem 0;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .metrics-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .metrics-table td {
+            padding: 8px;
+            border: 1px solid #ddd;
+        }
+
+        .metrics-table td:first-child {
+            font-weight: 600;
+            background: #2c3e50;
+            color: white;
+            width: 30%;
+        }
+
     </style>
 
     <meta charset="utf-8" />
@@ -461,25 +486,22 @@
             loadCounter++;
 
 
-/*
-            var divCounter = document.getElementById('LoadReportCounter');
+            // Compute metrics for the current refresh:
+            var currentTime = new Date();
+            // Calculate current refresh duration in seconds (subtracting thinkTime)
+            var currentDuration = Math.round(((currentTime - runTime) - (thinkTimeSeconds*1000)) / 1000);
+            runTime = currentTime;
+            var totalElapsed = currentTime - startTime;
+            var totalThinkTime = thinkTimeSeconds * (loadCounter - 1) * 1000;
+            var avgDuration = Math.round((totalElapsed - totalThinkTime) / loadCounter) / 1000;
 
-			var avgDuration = Math.round(((((new Date()) - startTime) - (thinkTimeSeconds*(loadCounter-1)*1000)) / loadCounter)) / 1000;
-            divCounter.innerHTML = loadCounter
-			 + " refreshes<br/>" 
-			 + avgDuration + " seconds average refresh time<br/>"
-			 + thinkTimeSeconds + " seconds think time";   
-			 */
-
-
-            //NOTE: added 5/25/19 to see if helps address session memory leak issue
+            // Update the metrics table cells with calculated values
+            updateMetricsTable(reportId, instanceID, loadCounter, numberOfViews, runTime, currentDuration, avgDuration, thinkTimeSeconds, pageNametext, bookmarkValue, filtertext, slicertext, projectName);
 
             if((loadCounter % sessionRestart) === 0) {
-
-                sessionStorage.setItem('reloadCounter',loadCounter);      
-                sessionStorage.setItem('originalStartTime',startTime);     				
+                sessionStorage.setItem('reloadCounter', loadCounter);      
+                sessionStorage.setItem('originalStartTime', startTime);                        
                 location.reload(false);
-
             };           
 
         } 
@@ -527,7 +549,51 @@
         <h1>Realistic User Testing Tool Enhanced</h1>
     </header>
 
-    <div id="LoadReportCounter">0</div>
+    <div class="metrics-panel">
+        <h3>Performance Metrics</h3>
+        <table class="metrics-table">
+            <tr>
+                <td>Project Name</td>
+                <td id="projectNameCell">Loading...</td>
+            </tr>
+			<tr>
+                <td>Report ID</td>
+                <td id="reportIdCell">Loading...</td>
+            </tr>           
+			<tr>
+                <td>Page Name</td>
+                <td id="pageNameCell">Loading...</td>
+            </tr>
+            <tr>
+                <td>Instance ID</td>
+                <td id="instanceIdCell">Loading...</td>
+            </tr>
+            <tr>
+                <td>Completed Refreshes</td>
+                <td id="refreshCounterCell">0</td>
+            </tr>
+            <tr>
+                <td>Current Refresh</td>
+                <td id="currentDurationCell">0.00s</td>
+            </tr>
+            <tr>
+                <td>Average Refresh</td>
+                <td id="averageDurationCell">0.00s</td>
+            </tr>
+            <tr>
+                <td>Total Runtime</td>
+                <td id="totalTimeCell">0:00:00</td>
+            </tr>
+            <tr>
+                <td>Active Bookmark</td>
+                <td id="bookmarkCell">Loading...</td>
+            </tr>
+            <tr>
+                <td>Active Filters</td>
+                <td id="filtersCell">Loading...</td>
+            </tr>
+		</table>	
+    </div>
 
     <!--
 	<div id="InfoMessage" style="font-weight:bolder;">Report URL and AAD token:</div>
@@ -540,8 +606,9 @@
     <hr style="width:99%;" />
 
     <div id="embedDiv" style="height: 800px; width: 100%; max-width: 1200px;"></div>
-
+	<div id="LoadReportCounter" style="display: none;">Loading report...</div>
     <footer class="footer">
+
         Based on PowerBI-Tools-For-Capacities - https://github.com/microsoft/PowerBI-Tools-For-Capacities<br>
         Further developed by Mihaly Kavasi, Version 0.7.1
     </footer>
@@ -561,6 +628,32 @@
 
 
 
+</script>
+
+<script>
+    // Helper function to update the metrics table cells
+    function updateMetricsTable(reportId, instanceID, loadCounter, numberOfViews, runTime, currentDuration, avgDuration, thinkTimeSeconds, pageNametext, bookmarkValue, filtertext, slicertext, projectName) {
+        document.getElementById("reportIdCell").innerHTML = reportId;
+        document.getElementById("instanceIdCell").innerHTML = instanceID;
+        document.getElementById("refreshCounterCell").innerHTML = loadCounter + "/" + numberOfViews;
+        document.getElementById("currentDurationCell").innerHTML = currentDuration + " seconds";
+        document.getElementById("averageDurationCell").innerHTML = avgDuration + " seconds";
+        
+        // Compute formatted total runtime (HH:MM:SS)
+        var totalElapsed = new Date() - startTime;
+        var totalSeconds = Math.floor(totalElapsed / 1000);
+        var hours = Math.floor(totalSeconds / 3600);
+        var minutes = Math.floor((totalSeconds % 3600) / 60);
+        var seconds = totalSeconds % 60;
+        document.getElementById("totalTimeCell").innerHTML = hours + ":" + minutes + ":" + seconds;
+        
+        document.getElementById("bookmarkCell").innerHTML = bookmarkValue;
+        document.getElementById("filtersCell").innerHTML = filtertext + "<br>" + slicertext;
+        
+        // Update additional metrics: page name and project name
+        document.getElementById("pageNameCell").innerHTML = pageNametext;
+        document.getElementById("projectNameCell").innerHTML = projectName;
+    }
 </script>
 
 </html>

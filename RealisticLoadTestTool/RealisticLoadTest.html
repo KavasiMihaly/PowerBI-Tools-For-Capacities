@@ -14,6 +14,45 @@
 
         }
 
+        .header {
+            background: #2c3e50;
+            color: white;
+            padding: 1.5rem;
+            text-align: center;
+            border-radius: 5px;
+            margin-bottom: 1rem;
+        }
+        
+        .header h1 {
+            margin: 0;
+            font-size: 2rem;
+            font-weight: 300;
+        }
+
+        #embedDiv {
+            border: 3px solid #3498db;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            margin: 1rem auto;
+            padding: 10px;
+            background: white;
+        }
+
+        .footer {
+            background: #2c3e50;
+            color: white;
+            padding: 1rem;
+            text-align: center;
+            border-radius: 5px;
+            margin-top: 1rem;
+            font-size: 0.9rem;
+        }
+
+        body {
+            background: #ecf0f1;
+            padding: 1rem;
+        }
+
     </style>
 
     <meta charset="utf-8" />
@@ -484,8 +523,9 @@
 </head>
 
 <body>
-
-
+    <header class="header">
+        <h1>Realistic User Testing Tool Enhanced</h1>
+    </header>
 
     <div id="LoadReportCounter">0</div>
 
@@ -499,10 +539,12 @@
 
     <hr style="width:99%;" />
 
-    <div id="embedDiv" style="height: 800px; width: 100%; max-width: 1200px;" ></div>
+    <div id="embedDiv" style="height: 800px; width: 100%; max-width: 1200px;"></div>
 
-
-
+    <footer class="footer">
+        Based on PowerBI-Tools-For-Capacities - https://github.com/microsoft/PowerBI-Tools-For-Capacities<br>
+        Further developed by Mihaly Kavasi, Version 0.7.1
+    </footer>
 </body>
 
 <script>

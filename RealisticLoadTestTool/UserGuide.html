@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Realistic User Testing Tool Enhanced - Documentation</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Arial, sans-serif;
+            line-height: 1.6;
+            margin: 2rem;
+            background: #f8f9fa;
+        }
+        
+        .header {
+            background: #2c3e50;
+            color: white;
+            padding: 2rem;
+            border-radius: 8px;
+            margin-bottom: 2rem;
+        }
+        
+        h1, h2, h3 {
+            color: #2c3e50;
+        }
+        
+        .section {
+            background: white;
+            padding: 2rem;
+            border-radius: 8px;
+            margin-bottom: 2rem;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        code {
+            background: #f4f4f4;
+            padding: 0.2rem 0.4rem;
+            border-radius: 4px;
+            font-family: Consolas, monospace;
+        }
+        
+        pre {
+            background: #f8f9fa;
+            padding: 1rem;
+            border-left: 4px solid #3498db;
+            overflow-x: auto;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1rem 0;
+        }
+        
+        th, td {
+            border: 1px solid #ddd;
+            padding: 0.8rem;
+            text-align: left;
+        }
+        
+        th {
+            background-color: #2c3e50;
+            color: white;
+        }
+        
+        tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+        
+        .header h1 {
+            color: white;
+            margin: 0 0 0.5rem 0;
+            font-size: 2.5rem;
+        }
+        
+        .footer {
+            color: #666;
+            text-align: center;
+            margin-top: 2rem;
+            padding: 1rem;
+        }
+        
+        .config-note {
+            background: #e3f2fd;
+            border-left: 4px solid #2196F3;
+            padding: 1rem;
+            margin: 1rem 0;
+        }
+        
+        .config-matrix td:nth-child(3) code {
+            word-break: break-word;
+            white-space: normal;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Realistic User Testing Tool Enhanced</h1>
+        <p>Version 0.7.1 | Developed by Mihaly Kavasi</p>
+    </div>
+
+    <div class="section">
+        <h2>Table of Contents</h2>
+        <ul>
+            <li><a href="#installation">Installation</a></li>
+            <li><a href="#quickstart">Quick Start</a></li>
+            <li><a href="#configuration">Configuration Guide</a></li>
+            <li><a href="#examples">Configuration Examples</a></li>
+            <li><a href="#troubleshooting">Troubleshooting</a></li>
+        </ul>
+    </div>
+
+    <div class="section" id="installation">
+        <h2>Installation Requirements</h2>
+        <pre><code># Run in elevated PowerShell
+Set-ExecutionPolicy Unrestricted
+Install-Module -Name MicrosoftPowerBIMgmt</code></pre>
+    </div>
+
+    <div class="section" id="quickstart">
+        <h2>Quick Start Guide</h2>
+        <h3>Basic Workflow</h3>
+        <ol>
+            <li>Initialize test setup:
+                <pre><code>.\Setup_Load_Test.ps1</code></pre>
+            </li>
+            <li>Update authentication tokens:
+                <pre><code>.\Update_Token_Only.ps1</code></pre>
+            </li>
+            <li>Run test with 4 instances:
+                <pre><code>.\Run_Load_Test_Only.ps1 -Instances 4</code></pre>
+            </li>
+        </ol>
+    </div>
+
+    <div class="section" id="configuration">
+        <h2>Configuration Guide</h2>
+        
+        <h3>Key Configuration Files</h3>
+        <p>The tool uses dedicated configuration files to control test behavior:</p>
+        <dl>
+            <dt>📁 PBIReport.JSON</dt>
+            <dd>Controls report parameters including:
+                <ul>
+                    <li>🔘 Filters/Slicers combinations</li>
+                    <li>📖 Bookmark sequences</li>
+                    <li>📄 Report page selection</li>
+                    <li>⏱ Think time between actions</li>
+                    <li>📱 Mobile layout settings</li>
+                </ul>
+            </dd>
+            
+            <dt>📁 PBIToken.JSON</dt>
+            <dd>Manages authentication credentials and access tokens</dd>
+        </dl>
+
+        <div class="config-note">
+            <p>💡 Pro Tip: Edit these files in a JSON-aware editor (VS Code, Notepad++) 
+            to configure different test scenarios without code changes!</p>
+        </div>
+
+        <h3>PBIReport.JSON Structure</h3>
+        <pre><code>{
+    "reportUrl": "https://app.powerbi.com/reportEmbed?...",
+    "pageName": "ReportSection123",
+    "bookmarkList": ["Bookmark1a2b3c","Bookmark4d5e6f"],
+    "filters": [
+        {
+            "filterTable": "SalesData",
+            "filterColumn": "Region",
+            "isSlicer": true,
+            "filtersList": ["North","South","East","West"]
+        }
+    ],
+    "thinkTimeSeconds": 5,
+    "sessionRestart": 100,
+    "layoutType": "MobilePortrait"
+}</code></pre>
+
+        <h3>Core Configuration Capabilities</h3>
+        <table class="config-matrix">
+            <tr>
+                <th>Feature</th>
+                <th>Configuration File</th>
+                <th>Example Value</th>
+            </tr>
+            <tr>
+                <td>Page Selection</td>
+                <td>PBIReport.JSON</td>
+                <td><code>"pageName": "ReportSection123"</code></td>
+            </tr>
+            <tr>
+                <td>Bookmark Sequence</td>
+                <td>PBIReport.JSON</td>
+                <td><code>"bookmarkList": ["BM1","BM2"]</code></td>
+            </tr>
+            <tr>
+                <td>Filter Combinations</td>
+                <td>PBIReport.JSON</td>
+                <td><code>"filtersList": ["North",["East","West"]]</code></td>
+            </tr>
+            <tr>
+                <td>Authentication</td>
+                <td>PBIToken.JSON</td>
+                <td><em>(Auto-generated credentials)</em></td>
+            </tr>
+        </table>
+    </div>
+
+    <div class="section" id="examples">
+        <h2>Configuration Examples</h2>
+        <h3>Multi-Select Filters</h3>
+        <pre><code>"filtersList": [
+    ["North","South"], 
+    "East", 
+    ["West","Central"]
+]</code></pre>
+
+        <h3>Mobile Testing</h3>
+        <pre><code>"layoutType": "MobileLandscape"</code></pre>
+    </div>
+
+    <div class="section" id="troubleshooting">
+        <h2>Troubleshooting Guide</h2>
+        <table>
+            <tr>
+                <th>Issue</th>
+                <th>Solution</th>
+            </tr>
+            <tr>
+                <td>Blank report display</td>
+                <td>Run <code>Update_Token_Only.ps1</code> to refresh credentials</td>
+            </tr>
+            <tr>
+                <td>High CPU usage</td>
+                <td>Reduce number of instances in Run_Load_Test_Only.ps1</td>
+            </tr>
+            <tr>
+                <td>JSON parsing errors</td>
+                <td>Validate PBIReport.JSON syntax using JSON validator</td>
+            </tr>
+        </table>
+    </div>
+
+    <div class="section">
+        <h2>Best Practices</h2>
+        <ul>
+            <li>🔧 Start with 5-10 second think time for initial validation</li>
+            <li>📈 Use 1 browser instance per physical CPU core</li>
+            <li>🔄 Set sessionRestart between 100-200 iterations</li>
+            <li>📊 Monitor using Premium Capacity Metrics App</li>
+        </ul>
+    </div>
+
+    <div class="footer">
+        <p>Based on PowerBI-Tools-For-Capacities - https://github.com/microsoft/PowerBI-Tools-For-Capacities<br>
+        Further developed by Mihaly Kavasi</p>
+    </div>
+</body>
+</html> 

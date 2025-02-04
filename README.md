@@ -13,6 +13,7 @@ Code is not complete. This version will not work by itself.
 * Enhanced measurement accuracy by adjusting think time calculations in refresh duration metrics
 * Added proper version numbering consistency across all interface elements
 * Maintained full backwards compatibility with existing test configurations
+![](../doc_images/Enhancements.png)
   
 # Version 0.7
 - Added the ability to define the Project Name for the test

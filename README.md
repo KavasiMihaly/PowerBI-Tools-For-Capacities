@@ -2,6 +2,18 @@
 This is an updated version of the Power BI Realistic Load testing tool.
 Code is not complete. This version will not work by itself.
 
+# Version 0.7.1
+* Added enhanced UI design elements to testing interface including:
+  - Professional header with "Realistic User Testing Tool Enhanced" title
+  - Styled border with shadow effect around Power BI report embed
+  - Matching footer with version information and developer credits
+  - Modern color scheme (dark blue/light blue theme)
+* Improved page layout and spacing for better readability
+* Fixed footer text to properly credit both original Microsoft project and current maintainer
+* Enhanced measurement accuracy by adjusting think time calculations in refresh duration metrics
+* Added proper version numbering consistency across all interface elements
+* Maintained full backwards compatibility with existing test configurations
+  
 # Version 0.7
 - Added the ability to define the Project Name for the test
 - Created Test folder name is changed to Workspace Name + Report Name + DateTime from just DateTime

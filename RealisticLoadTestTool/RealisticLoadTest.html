@@ -244,9 +244,11 @@
 				var bookmarktext = JSON.stringify(bookmarkValue); //MK
 				var filtertext = JSON.stringify(filterValue.filters); //MK
 				var slicertext = JSON.stringify(filterValue.slicers); //MK
-				var currentDuration = Math.round(((new Date()) - runTime) - (thinkTimeSeconds*1000)) / 1000; //MK
+				var currentDuration = Math.round((new Date() - runTime) - (thinkTimeSeconds*1000)) / 1000; //MK
 				runTime = new Date(); //MK
-				var avgDuration = Math.round(((((new Date()) - startTime) - (thinkTimeSeconds*loadCounter*1000)) / loadCounter)) / 1000;
+				var totalElapsed = (new Date() - startTime);
+				var totalThinkTime = thinkTimeSeconds * (loadCounter) * 1000;
+				var avgDuration = Math.round((totalElapsed - totalThinkTime) / loadCounter) / 1000;
 				divCounter.innerHTML = 
 				"Report id: " + reportId + "<br>"//MK
 				+ "Instance id: " + instanceID + "<br>"//MK

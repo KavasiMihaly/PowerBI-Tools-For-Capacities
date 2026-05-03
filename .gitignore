@@ -422,3 +422,25 @@ RealisticLoadTestTool/GPUCache/data_1
 RealisticLoadTestTool/GPUCache/data_2
 RealisticLoadTestTool/GPUCache/data_3
 RealisticLoadTestTool/GPUCache/index
+
+# === RealisticLoadTest v2 modernization additions ===
+
+# Claude Code local config & session logs (machine-specific, may contain prompt content)
+.claude/
+_Agent Logs/
+
+# AAD access tokens — never commit. Real JWTs leak tenant ID, user ID, and scopes.
+# The master template at RealisticLoadTestTool/PBIToken.json (empty token) is already
+# tracked and is kept; the negation below preserves it on a fresh checkout.
+**/PBIToken.JSON
+**/PBIToken.json
+!RealisticLoadTestTool/PBIToken.json
+
+# Auto-generated per-test folders created by Setup_Load_Test.ps1 / Setup.html
+# (named "<Workspace> - <Report> - <MM-dd-yy_HHmmss>"). They contain a real
+# PBIToken.JSON and are local-run scratch — never commit.
+# Spaces in gitignore patterns are literal (no escaping needed).
+RealisticLoadTestTool/* - * - *_*/
+
+# Live test-run output. Baseline test data is preserved under _Test/baselines/.
+RealisticLoadTestTool/Test Results/*.txt

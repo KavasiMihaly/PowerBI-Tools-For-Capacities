@@ -1,4 +1,17 @@
 ﻿################################################################################################################################################################################
+# [v0.8 DEAD CODE NOTICE]
+# This script writes a token to PBIToken.JSON which the v0.8 HTML NO LONGER READS.
+# Running it will succeed silently but the load test will not pick up the refreshed token.
+#
+# The v0.8 RealisticLoadTest.html uses MSAL.js exclusively for auth (see auth-config.json
+# and _Documentation/MSAL-app-registration.md). The legacy PBIToken.json path was removed
+# in backlog T5b on 2026-05-05.
+#
+# This file is kept in the repo only because Run_Load_Test_Only.ps1 + CefSharp/ChromeWriteBack
+# still expect it on disk (the multi-window concurrency runner is broken in v0.8 — pending
+# v1.0 Playwright replacement). Both this script and ChromeWriteBack/ are scheduled for
+# DELETION in v1.0.
+# ------------------------------------------------------------------------------------------------------------------------------------------------------
 # Script to update the token file in all subfolders since tokens expire after 60 minutes
 #------------------------------------------------------------------------------------------------------------------------------------------------------
 #
@@ -8,6 +21,10 @@
 # The script obtains a new token then updates the PBIToken.JSON file in each subfolder of the current working directory.
 #
 ################################################################################################################################################################################
+Write-Host "[v0.8 DEAD CODE] Update_Token_Only.ps1 writes a token the HTML no longer reads." -ForegroundColor Red
+Write-Host "                The v0.8 RealisticLoadTest.html uses MSAL only — see auth-config.json." -ForegroundColor Red
+Write-Host "                This script will be deleted in v1.0." -ForegroundColor Red
+Write-Host "" -ForegroundColor Red
 
 #Variables declaration
 $destinationDir = ''

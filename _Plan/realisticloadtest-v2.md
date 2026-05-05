@@ -129,12 +129,92 @@ const embedConfig = {
 
 **T7. Update docs.** Update `Readme.md` and `UserGuide.html` to reflect: vendored libs (no internet needed at runtime beyond Power BI itself), MSAL setup steps, JSONL format schema, deprecation of `Update_Token_Only.ps1`. Bump footer version to `0.8.0`.
 
+**T5a. Sign-in button (popup must originate from a user gesture).** *Discovered during first end-to-end smoke test on 2026-05-05.* The MSAL `acquireTokenPopup` call in T5 was wired to fire automatically during page bootstrap. Modern browsers (Chrome/Edge/Firefox) silently block any popup that isn't triggered synchronously from a user click — the result was `popup_window_error` on every first-time load.
+
+Fix: split `acquireToken()` into `acquireTokenSilent()` (used by bootstrap and by the SDK's runtime `accessTokenProvider` hook) and `acquireTokenInteractive()` (only ever called from a button click handler). Bootstrap flow becomes: try silent first → if a token comes back, proceed; if MSAL is configured but silent missed (no cached account), show a "Sign in with Microsoft" button and wait for a click; if no MSAL at all, fall back to the legacy error path. After the click, the popup opens cleanly because the browser sees a real user gesture. After the first successful sign-in the token caches in `localStorage`, so subsequent visits acquire silently with no button or popup.
+
+Also locked down: `tokenProvider()` (the SDK runtime hook called minutes before token expiry) is now silent-only. Popping up a sign-in window mid-test would be hostile.
+
+Lesson recorded in `MEMORY.md`. Backlog row: T5a.
+
+**T5b. Remove legacy `PBIToken.json` auth path (MSAL becomes mandatory).** *Decided 2026-05-05 after the legacy fallback was confirmed working but added unwanted dual-path complexity.*
+
+The original v0.8 plan called for backwards-compatibility: when `auth-config.json` was missing, the page would fall back to reading a token from `PBIToken.json` (refreshed every 60 min by `Update_Token_Only.ps1`). After getting MSAL working end-to-end, the user opted to drop the legacy path entirely. Reasoning:
+- MSAL is the modern, sustainable auth model. Two paths means two test surfaces and two bug surfaces forever.
+- The legacy path required users to *remember* to run `Update_Token_Only.ps1` every hour — exactly the friction MSAL was meant to eliminate.
+- Tenants that can't register an Entra SPA app are a small minority and can stay on v0.7.1 (or wait for v1.0 service-principal options).
+
+Fix in `RealisticLoadTest.html`:
+- Remove `<script src="PBIToken.json">` tag — `accessToken` global no longer defined.
+- Remove the legacy fallback in `acquireTokenSilent()`. Function now early-returns null if `msalApp` is null.
+- Simplify bootstrap error path: when MSAL isn't configured, show a clear "configure auth-config.json" message instead of "Run Update_Token_Only.ps1 (legacy) or…".
+- `updateAuthBanner()` no longer dispatches between "legacy mode" and "MSAL mode" — banner is hidden by default and only shown by `showAuthError()`.
+
+**Multi-window concurrency consequence (accepted by user):** `Run_Load_Test_Only.ps1` launches CefSharp `ChromeWriteBack` windows via `file://` URLs. Entra rejects `file://` redirect URIs, so MSAL physically cannot work in CefSharp. Without the legacy `PBIToken.json` fallback, multi-window runs have no working auth path in v0.8. **Resolution: wait for v1.0 Playwright runner (T13), which uses Chromium with `http://localhost` and supports MSAL natively.** Documented in the Readme with a clear ⚠️ banner.
+
+**Files kept on disk (deleted in v1.0):**
+- `RealisticLoadTestTool/PBIToken.json` (template — only because `Setup_Load_Test.ps1` still emits per-folder copies)
+- `RealisticLoadTestTool/Update_Token_Only.ps1` (banner now reads "v0.8 DEAD CODE — script will be deleted in v1.0")
+- `RealisticLoadTestTool/ChromeWriteBack/`
+- PBIToken-writing logic inside `Setup_Load_Test.ps1`
+
+These get deleted as backlog row T13a alongside the Playwright migration.
+
+**Test plan impact:**
+- TEST-V08-12 (legacy fallback) removed — there's nothing to test. Test count drops from 12 → 11.
+- T5 coverage matrix row updated to drop V08-12.
+- Exit criteria updated to require all 11 active tests Pass.
+
+**Removed from "What's new in v0.8":** the `Backwards-compatible` bullet. Replaced with an explicit "Legacy `PBIToken.json` auth path removed" bullet plus a multi-window-broken warning at the top of the Readme.
+
+Backlog row: T5b. Pair v1.0 cleanup tracked as T13a.
+
+**T4b. JSONL schema refinement — drop average, flag first render.** *Discovered while analysing the first ad-hoc test on 2026-05-05.* Original v0.8 emit had `durationMs: { current: 1341, average: 6222 }` per record. Two problems:
+
+1. `average` is an aggregate, not a measurement — derivable from `current` values at analysis time. Emitting it per record duplicates information and complicates the schema.
+2. The first render after a page load incurs cold-start cost (auth handshake + SDK init + initial iframe load). Including it in the same series as steady-state renders skews aggregates. Dropping it would lose the "first user impression" data point — which IS valuable, just for a different question.
+
+Fix:
+- Flatten `durationMs` to a plain integer (ms). Aggregates stay out of the wire format.
+- Add `isFirstRender: boolean`. `true` for the first `rendered` event after every page load (including periodic `sessionRestart` reloads, since each is a fresh user experience). `false` thereafter. Lets analysis split warmup from steady state without guessing.
+- Remove the on-screen "Average Refresh" cell (same reasoning — the live UI was carrying the same useless aggregate). Keep "Current Refresh" with a `(cold start)` suffix when `isFirstRender` is true.
+
+Impact:
+- Test plan TEST-V08-04 updated — different events now legitimately have different key sets (rendered has +2 keys, error has +2 keys, etc.). The old "all rows have exactly the same 14 keys" expectation was wrong even before T4b.
+- JSONL schema doc updated with new shape, parsing tips for steady-state-only aggregates, and the per-event-type expected-key-set table.
+
+Backlog row: T4b.
+
+**T7b. In-page Setup picker (MVP of B2/T8).** *Discovered during first end-to-end smoke test on 2026-05-05.* User opened `RealisticLoadTest.html` directly with the empty template `PBIReport.json` in place and got `Embed Url is required`. The original PowerShell setup (`Setup_Load_Test.ps1`) had a workspace/report picker; v0.8 dropped users into a "configure JSON by hand or run PowerShell" cliff for ad-hoc tests.
+
+Fix: add an in-page Setup panel that's shown when `reportParameters.reportUrl` is empty. Flow:
+1. After MSAL token (silent or click), check if `embedUrl` is set.
+2. If empty → call `GET /v1.0/myorg/groups` (Power BI REST), populate workspace dropdown.
+3. On workspace select → call `GET /v1.0/myorg/groups/{id}/reports`, populate report dropdown.
+4. User picks report + sets `numberOfViews`, `thinkTimeSeconds`, `projectName`.
+5. Click "Start Test" → override module-scope globals with picker values, hide panel, run `EmbedReport()`.
+
+Filter/bookmark/page UI is **deferred to T8 (v1.0)** — this is the MVP for ad-hoc workspace+report selection only. Repeatable scenarios with filters still use `Setup_Load_Test.ps1` (writes per-test subfolders). The picker complements the PowerShell flow, doesn't replace it.
+
+New scope requirement: `Workspace.Read.All` (delegated, admin-consented). If only `Report.Read.All` is granted, the picker shows a permission error pointing to `_Documentation/MSAL-app-registration.md`. Both `auth-config.example.json` and the MSAL doc updated to require this.
+
+REST helpers: tiny `pbiFetch(token, path)` wrapper that calls `https://api.powerbi.com/v1.0/myorg<path>` with the bearer token; throws on non-2xx with status + first 300 chars of body for diagnostics.
+
+Backlog row: T7b. Future filter/bookmark/page-picker work continues under T8.
+
 ### Files modified (v0.8)
 
-- `RealisticLoadTestTool/RealisticLoadTest.html` (T1, T2, T3, T4, T5, T6)
-- `RealisticLoadTestTool/Readme.md` (T7)
-- `RealisticLoadTestTool/UserGuide.html` (T7)
-- `RealisticLoadTestTool/Update_Token_Only.ps1` (deprecation note, T5)
+- `RealisticLoadTestTool/RealisticLoadTest.html` (T1, T2, T3, T4, T4b, T5, T5a, T5b, T6, T7b)
+- `RealisticLoadTestTool/Readme.md` (T7, T5a, T5b, T7b, T4b)
+- `RealisticLoadTestTool/UserGuide.html` (T7, T5a, T7b)
+- `_Documentation/JSONL-schema.md` (T4, T4b)
+- `_Documentation/MSAL-app-registration.md` (T5, T5a, T5b, T7b)
+- `_Test/v0.8-test-plan.md` (TP1, T4b — TEST-V08-04 updated for per-event key sets; T5b — TEST-V08-12 removed)
+- `RealisticLoadTestTool/Update_Token_Only.ps1` (T5b — banner upgraded to "v0.8 DEAD CODE")
+- `RealisticLoadTestTool/auth-config.example.json` (T7b — added `Workspace.Read.All` scope)
+- `RealisticLoadTestTool/auth-config.json` (T7b — added `Workspace.Read.All` scope)
+- `_Documentation/MSAL-app-registration.md` (T7, T5a, T7b)
+- `.gitignore` (T5 — added `RealisticLoadTestTool/auth-config.json`; doc had claimed it was ignored but rule was missing)
 
 ### Files added (v0.8)
 
@@ -144,13 +224,144 @@ const embedConfig = {
 - `RealisticLoadTestTool/auth-config.example.json` (committed example)
 - `_Documentation/MSAL-app-registration.md` (one-time Entra setup steps)
 - `_Documentation/JSONL-schema.md` (the metric record schema for v0.8)
-- `_Test/v0.8-smoke-test.md` (test plan — see Verification)
+- `_Test/v0.8-test-plan.md` (test plan — see TP1)
+- `MEMORY.md` (lessons captured during v0.8 smoke testing — MSAL popup-on-load, exact-string redirect URI matching, gitignore claims-vs-reality)
 
 ### Files unchanged (v0.8) — explicit non-goals
 
-- `Setup_Load_Test.ps1` — still works as before; UI replacement is v1.0
+- `Setup_Load_Test.ps1` — still works as before; UI replacement is v1.0. The in-page T7b picker is a complement (ad-hoc), not a replacement (no filters/bookmarks).
 - `Run_Load_Test_Only.ps1` — still launches ChromeWriteBack; Playwright is v2.0
 - `ChromeWriteBack/` — kept, unchanged
+
+### B5 — Capture report-render errors as a feature *(Research)*
+
+**Status:** Backlog / Research — not yet scoped.
+
+**Origin (2026-05-05):** During the first ad-hoc test run via the in-page Setup picker, the DevTools console showed a Power BI iframe-internal warning:
+
+```
+Expected value to be of type number, but found null instead.
+  at <blob-url>:1
+```
+
+The render still completed (`durationMs: 21106` was emitted), so our existing `report.on('error')` SDK-level handler caught nothing. The warning came from inside the embedded iframe — a visual or measure produced a null where a numeric value was expected. This kind of report-quality issue is **invisible to the load test today**: timings come back, JSONL fills, capacity metrics look fine, but the report has a broken visual nobody can see.
+
+For capacity stress testing this matters because:
+- A report that errors on certain filter combinations will skew capacity metrics (errored visuals don't run queries → misleadingly low CU)
+- Tenants running this tool to evaluate report scalability want to know "this report has visual X failing on slicer combination Y" *as part of the same run*, not in a separate manual investigation
+- Visuals that silently fail in production are a real source of user-reported "the dashboard is broken" tickets that load testing could catch in advance
+
+**Open research questions (must answer before designing):**
+
+1. **What error / warning surfaces does the Power BI JS SDK actually expose?**
+   - `report.on('error')` — SDK-level (already wired). What event types does it fire?
+   - `report.on('visualRendered')` / `report.on('visualClicked')` — per-visual events. Do they carry error state?
+   - `report.on('dataSelected')` / `report.on('rendered')` — do these have an error sub-channel?
+   - `console` capture from inside the iframe — possible? Cross-origin restrictions likely block it.
+   - The `dataLoaded` event — does it surface query failures?
+   - `getErrors()` method on visuals/pages — exists?
+2. **What's the difference between an iframe-internal validation log and an actual SDK error?** The "Expected value to be of type number" line came from a `blob:` URL inside the iframe. Cross-origin SOP almost certainly prevents us from reading those console messages from the parent page. Is there a postMessage channel the SDK exposes?
+3. **What's the right granularity?** Per-visual error events (lots of noise, hard to aggregate)? Per-page error counts? Per-render summary (`renderErrors: number`)?
+4. **JSONL schema impact.** Add a new `event: "render_error"` record? Add a `renderErrors: count` field on existing `rendered` events? Both?
+5. **Performance impact.** Each additional event listener costs cycles; subscribing to per-visual events for 50 visuals × 1000 renders × 10 instances is non-trivial.
+6. **What does the Power BI Capacity Metrics App already show for failed visuals?** If it already attributes failures, our load-test surfacing might be redundant.
+
+**Hypothetical implementation sketch (subject to research outcome):**
+
+```js
+// On embed:
+report.on('error', emitErrorMetric);     // already wired
+report.on('visualRendered', evt => {
+    if (evt.detail && evt.detail.error) emitErrorMetric(evt);
+});
+// New JSONL event type:
+{ "event": "render_error", "visualName": "...", "errorCode": "...", "errorDetail": "..." }
+```
+
+**Deliverables when this graduates from Research → In Progress:**
+- A research doc at `_Research/pbi-sdk-error-surfaces.md` answering the questions above
+- A design proposal in this plan (new section §v?.?-B5)
+- A test plan addition (TEST-V?-?? for the new event capture)
+
+**Phase placement:** TBD — most likely v0.9 (a v0.8.x patch series) if the SDK already exposes enough hooks, or v1.0 if it requires the resource-monitor sidecar to bridge the iframe boundary.
+
+Backlog row: B5.
+
+---
+
+### B6 — Capture Log Analytics query telemetry *(Research)*
+
+**Status:** Backlog / Research — not yet scoped.
+
+**Origin (2026-05-05):** Discussed alongside B5 while looking at what *real* root-cause data load tests should produce. Today the JSONL captures wall-clock render duration per cycle. That tells you "render took 6 s" but not "*why* — was it a slow DAX query, a slow SE scan, capacity throttling, a redirect to a different node?" The answers all live in Power BI's backend telemetry, surfaced via **workspace-level Log Analytics integration** (settings → Azure connections → Log Analytics).
+
+When LA is connected to the workspace under test, every report query fires a record to the customer's Log Analytics workspace with: DAX query text, duration, SE/FE split, dataset, user, activity ID, capacity ID, throttling state, error code, and more (full schema in the `PowerBIDatasetsWorkspace` table). If the load test pulls these records back and joins them per render via Activity ID, capacity-stress runs become *root-cause* investigations instead of just timing distributions.
+
+**Why it matters for capacity stress testing:**
+- A 6 s render breaks down into "5.2 s DAX, 0.8 s rendering" vs "0.3 s DAX, 5.7 s capacity throttling delay" — completely different fixes (model tuning vs capacity sizing) but same wall-clock number from the JS SDK
+- Slow visuals on specific filter combinations are usually one slow SE scan; LA shows you the exact query text so you can repro in DAX Studio without guessing
+- Capacity CU consumption per render lets you correlate "this filter combination costs 12 CU each" — usable for sizing decisions
+- Throttling events that happen mid-test are invisible to the JS SDK (it just sees longer renders); LA shows them explicitly with `OperationDetailName: "ThrottlingDelay"`
+
+**Open research questions (must answer before designing):**
+
+1. **Auth model.** LA queries hit `https://api.loganalytics.io` (or via `https://management.azure.com` + ARM API). Different audience than Power BI service — needs a **separate MSAL scope** (`https://api.loganalytics.io/Data.Read` or `https://management.azure.com/user_impersonation`). Can the same MSAL flow request both scopes (incremental consent)? Or does this need a service principal for unattended runs?
+2. **What table and what columns?** `PowerBIDatasetsWorkspace` is the main one. Confirm: which columns identify a single visual query vs a refresh vs a metadata fetch. The `OperationName` enum has many values — only some are query-related.
+3. **Correlation key.** Power BI exposes an Activity ID at the dataset query level (in LA) and at the report render level (in the JS SDK via `report.getCorrelationId()` or similar — needs verification). Does the chain hold reliably? What's the fallback if Activity IDs don't match (e.g., same DAX served from cache)?
+4. **Latency.** LA records typically appear **2–5 minutes after the event** (sometimes longer under load). The load test would need to either:
+   (a) wait until run end, then bulk-fetch and join asynchronously to a separate `<instanceId>.la.jsonl` file, OR
+   (b) poll LA during the run with a delay buffer, accepting partial enrichment
+5. **Permissions / config the user must provide.** LA workspace ID, subscription ID, resource group, and Read access for the test identity. Make this an opt-in section in `auth-config.json` (e.g., `logAnalytics: { workspaceId, subscriptionId, resourceGroup, scope }` — absent = feature disabled).
+6. **JSONL schema impact.** Two options:
+   (a) New event type `event: "render_telemetry"` with full LA columns, joined by `activityId`. Keeps the live `rendered` event lean.
+   (b) Enrich `rendered` events post-hoc by rewriting the JSONL — fragile, breaks "append-only" property.
+   Option (a) is cleaner; produces a sibling `.la.jsonl` file per instance.
+7. **Cost.** LA queries are billed per GB scanned. A 30-min load test produces O(thousands) of records. Estimate: well under $1 per run for typical scenarios, but worth measuring.
+8. **Failure mode when LA isn't configured.** Most users won't have LA wired up. Feature must degrade silently to current behaviour — a one-line console message ("LA enrichment disabled — no `logAnalytics` block in `auth-config.json`") is enough. Never block the test.
+
+**Hypothetical implementation sketch (subject to research outcome):**
+
+```js
+// In auth-config.json (optional block):
+"logAnalytics": {
+    "workspaceId": "00000000-0000-0000-0000-000000000000",
+    "subscriptionId": "...",
+    "resourceGroup": "...",
+    "scope": "https://api.loganalytics.io/Data.Read"
+}
+
+// At end of run (view_limit_reached):
+const kql = `
+PowerBIDatasetsWorkspace
+| where TimeGenerated between (datetime("${runStartIso}") .. datetime("${runEndIso}"))
+| where DatasetId == "${datasetId}"
+| where OperationName in ("QueryEnd", "VisualContainerOnRender", "ProgressReportEnd")
+| project TimeGenerated, OperationName, DurationMs, Identity, ActivityId,
+          DatasetId, ReportId, CapacityId, OperationDetailName, ErrorCode
+`;
+const results = await fetch(`https://api.loganalytics.io/v1/workspaces/${laWorkspaceId}/query`,
+    { method: 'POST', headers: { Authorization: 'Bearer ' + laToken },
+      body: JSON.stringify({ query: kql }) });
+// Write to <instanceId>.la.jsonl
+```
+
+**Deliverables when this graduates from Research → In Progress:**
+- A research doc at `_Research/pbi-log-analytics-integration.md` answering the 8 questions above, including a real KQL query that returns useful columns and a sample joined record
+- A design proposal in this plan (new section §v?.?-B6)
+- A test plan addition for opt-in coverage (TEST-V?-?? — runs only when LA is configured)
+- Auth-config.json schema extension and example values
+
+**Phase placement:** TBD — likely v1.0 (it complements the resource monitor B3, where local CPU/RAM joins server-side query telemetry for end-to-end attribution) or pulled later into v2.0 (where the multi-VM coordinator already needs a place to receive heterogeneous data streams).
+
+Backlog row: B6.
+
+---
+
+### Known v0.8 limitations (carry into v0.8.x or v1.0)
+
+- **Per-test subfolders run by `Setup_Load_Test.ps1` / `Run_Load_Test_Only.ps1`** still ship the v0.7.1 HTML — those folders existed before v0.8 and were not regenerated. The vendored `lib/` and `auth-config.json` live at the tool root, so a new subfolder created by v0.8 `Setup_Load_Test.ps1` would also need either `../lib/`-style relative paths in the HTML or its own copies of `lib/` and `auth-config.json`. **Backlog item to add:** wire setup script to handle this. Until fixed, the v0.8 HTML is only correct when run from the tool root.
+- **In-page Setup picker has no filter/bookmark/page UI** — that's T8 in v1.0.
+- **`/groups` returns first 1000** — no pagination yet. Tenants with >1000 workspaces will see a truncated list.
 
 ---
 
@@ -234,6 +445,7 @@ Per user decision: build v1.0 architecture so v2.0 is straightforward, but **don
 Sketch of v2.0 work for future planning round:
 
 - **T13. Replace ChromeWriteBack with Playwright.** Node script that orchestrates N browser pages, captures `page.on('console')` for `'METRIC '`-prefixed lines (T4 already laid this groundwork), supports headless mode for VMs.
+- **T13a. Delete legacy auth artifacts at v1.0 cutover.** When T13 ships, delete: `RealisticLoadTestTool/PBIToken.json` (template), `RealisticLoadTestTool/Update_Token_Only.ps1`, `RealisticLoadTestTool/ChromeWriteBack/` directory, and the PBIToken-writing logic inside `Setup_Load_Test.ps1`. These were marked "v0.8 DEAD CODE" in T5b and held purely for the existing CefSharp runner — once Playwright replaces it, they have no consumer.
 - **T14. Service principal auth.** Cert-based; read SP credentials from env vars / Azure Key Vault on the VM.
 - **T15. Bicep/Terraform templates.** N VMs from a template, cloud-init installs Playwright + Node + the tool, registers with the coordinator endpoint over HTTPS.
 - **T16. Worker mode for the coordinator.** Workers register with `POST /workers/register`, receive scenario assignment, stream JSONL back. Coordinator handles fan-out and fan-in.

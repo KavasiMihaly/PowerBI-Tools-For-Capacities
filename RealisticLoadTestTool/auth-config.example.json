@@ -1,0 +1,11 @@
+{
+  "_comment": "Copy this file to auth-config.json and fill in the three values. auth-config.json is gitignored. See _Documentation/MSAL-app-registration.md for one-time setup.",
+  "clientId": "00000000-0000-0000-0000-000000000000",
+  "tenantId": "00000000-0000-0000-0000-000000000000",
+  "scopes": [
+    "https://analysis.windows.net/powerbi/api/Report.Read.All",
+    "https://analysis.windows.net/powerbi/api/Workspace.Read.All"
+  ],
+  "_scope_note": "Workspace.Read.All is required for the in-page Setup picker (lists workspaces/reports). If you only need to embed a pre-configured PBIReport.json, Report.Read.All alone is sufficient.",
+  "_optional_redirectUri": "Leave unset to use the page's own origin (recommended for local file:// or http://localhost). Override only if your app registration requires a specific value."
+}

@@ -1,17 +1,14 @@
 <!DOCTYPE html>
-
-
-
 <html lang="en">
-
 <head>
+    <meta charset="utf-8" />
+    <title>Realistic Load Test v0.8.0</title>
 
     <style>
-
-        body{
-
-            font-family: 'Segoe UI';            
-
+        body {
+            font-family: 'Segoe UI';
+            background: #ecf0f1;
+            padding: 1rem;
         }
 
         .header {
@@ -22,7 +19,7 @@
             border-radius: 5px;
             margin-bottom: 1rem;
         }
-        
+
         .header h1 {
             margin: 0;
             font-size: 2rem;
@@ -46,11 +43,6 @@
             border-radius: 5px;
             margin-top: 1rem;
             font-size: 0.9rem;
-        }
-
-        body {
-            background: #ecf0f1;
-            padding: 1rem;
         }
 
         .metrics-panel {
@@ -78,582 +70,691 @@
             width: 30%;
         }
 
-    </style>
-
-    <meta charset="utf-8" />
-
-    <title></title>
-
-    
-
-    <!--JS libraries-->
-
-    <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.11.1/jquery.min.js"></script>
-
-    <script src="https://cdn.rawgit.com/Microsoft/PowerBI-JavaScript/master/dist/powerbi.min.js" type="text/javascript"></script>
-
-    
-
-    <!-- user configurable parameters in external JSON files-->
-
-    <script type="text/javascript" src="PBIToken.json"></script>
-
-    <script type="text/javascript" src="PBIReport.json"></script>
-
-    
-
-    <script>
-
-		var startTime = new Date();
-		var runTime = startTime; //MK
-		var instanceID = Math.floor(Math.random() * 10000000) + 1
-
-        //TODO: provide your PBIE token; it will be valid for 60 min only!
-
-        //1. Install Power BI PowerShell module https://docs.microsoft.com/en-us/powershell/power-bi/overview?view=powerbi-ps
-
-        //2. Login into Power BI with your test identity account credentials using Login-PowerBI command
-
-        //3. Put PBIE token on clipboard: Get-PowerBIAccessToken -AsString | % {$_.replace("Bearer ","").Trim()} | clip
-
-        //4. Paste PBIE token value in JSON file; remove 'Bearer ' from the beginning of the string if present
-
-        //var PBIEtoken = "";
-
-        var PBIEtoken = JSON.parse(accessToken).PBIToken;
-
-
-
-        //TODO: replace with your report embed URL in the JSON file
-
-        //Get proper report embed URL using PS: Get-PowerBIReport -Id [report GUID] -WorkspaceId [workspace GUID] | Select -ExpandProperty EmbedUrl | Clip
-
-        //var embedUrl = 'https://app.powerbi.com/reportEmbed?reportId=b14f6f29-c5a0-407a-ae06-5c1ae8642285&groupId=7bbb6481-4081-4b0e-97d8-b5085dbb85f4';
-
-        var embedUrl = reportParameters.reportUrl;
-		var numberOfViews = reportParameters.numberOfViews; //MK
-		var projectName = reportParameters.projectName; //MK
-
-        
-
-        //TODO: replace with the seed filter value for your specific report filter 
-
-        var filterStart = reportParameters.filterStart;
-
-        var filterValue = filterStart; 
-
-        var filterMax = reportParameters.filterMax;
-
-        //var filterTable = reportParameters.filterTable;
-		
-		var filtersList = Array(0);
-		if (reportParameters.filters != undefined)
-		{
-			var arrFilterCounter = Array(reportParameters.filters.length);
-			var filterCombinations = 1;
-			for (var i = 0; i < reportParameters.filters.length; i++)
-			{
-				filterCombinations = filterCombinations * reportParameters.filters[i].filtersList.length;
-				arrFilterCounter[i] = 0;
-			}
-			
-			filtersList = Array(filterCombinations);
-			for (var i = 0; i < filterCombinations; i++)
-			{
-				filtersList[i] = {
-					slicers: [],
-					filters: []
-				};
-				for (var j = 0; j < reportParameters.filters.length; j++)
-				{
-					var v = reportParameters.filters[j].filtersList[arrFilterCounter[j]];
-
-					var filter = {
-						$schema: "http://powerbi.com/product/schema#basic",
-						target: {
-							table: reportParameters.filters[j].filterTable,
-							column: reportParameters.filters[j].filterColumn
-						},
-						operator: "In",
-						values: (v != null ? (Array.isArray(v) ? v : [v]) : reportParameters.filters[j].filtersList.filter(function(a) { return a != null; })),
-						filterType: 1
-					};
-					
-					var slicer = 
-					  {
-						selector: {
-						  $schema: "http://powerbi.com/product/schema#slicerTargetSelector",
-						  target: {
-							table: reportParameters.filters[j].filterTable,
-							column: reportParameters.filters[j].filterColumn
-						  } 
-						},
-						state: {
-						  filters: [
-							{
-							  $schema: "http://powerbi.com/product/schema#basic",
-							  target: {
-								table: reportParameters.filters[j].filterTable,
-								column: reportParameters.filters[j].filterColumn
-							  },
-							  operator: "In",
-							  values: (v != null ? (Array.isArray(v) ? v : [v]) : reportParameters.filters[j].filtersList.filter(function(a) { return a != null; }))
-							}
-						  ]
-						}
-					  };
-					
-					if (reportParameters.filters[j].isSlicer)
-						filtersList[i].slicers.push(slicer);
-					else
-						filtersList[i].filters.push(filter);
-						
-					
-				}
-				for (var z = reportParameters.filters.length - 1; z >= 0; z--)
-				{
-					if (arrFilterCounter[z]+1 < reportParameters.filters[z].filtersList.length)
-					{
-						arrFilterCounter[z]++;
-						z = -1;
-					}
-					else
-					{
-						arrFilterCounter[z] = 0;
-					}
-				}
-				
-
-
-			}
-		}
-		
-		function shuffleArray(array) {
-			for (let i = array.length - 1; i > 0; i--) {
-				const j = Math.floor(Math.random() * (i + 1));
-				[array[i], array[j]] = [array[j], array[i]];
-		}
-}
-		
-		var filtersCount = filterMax - filterStart;
-		if (filtersList != null)
-		{
-			filterStart = 0;
-			filterMax = filtersList.length;
-			filtersCount = filterMax;
-			shuffleArray(filtersList);
-		}
-
-		var bookmarkList = reportParameters.bookmarkList;
-		if (bookmarkList == null || bookmarkList == undefined || bookmarkList == "")
-		{
-			bookmarkList = [""];
-		}
-
-        //var filterColumn = reportParameters.filterColumn;
-
-        var thinkTimeSeconds = reportParameters.thinkTimeSeconds;
-		thinkTimeSeconds = (thinkTimeSeconds == null ? 0 : thinkTimeSeconds);
-		
-		var pageName = reportParameters.pageName;
-		pageName = (pageName == undefined ? null : pageName);
-
-		var layoutType = reportParameters.layoutType;
-		layoutType = (layoutType == undefined ? "Master" : layoutType);
-		
-		//var isSlicer = reportParameters.isSlicer;
-		//isSlicer = (isSlicer == undefined ? false : isSlicer);
-
-
-        //TODO: adjust this value in the JSON file based on the complexity of your report; helps free up clogged browser resources
-
-        var sessionRestart = reportParameters.sessionRestart; //NOTE: added to address hard to identify long-running session memory leak
-
-
-
-        var reportId = GetQSParam("reportId", embedUrl);
-
-        //preserving total report render count to support session restart flow
-
-        var loadCounter = sessionStorage.getItem('reloadCounter') === null ? 0 : sessionStorage.getItem('reloadCounter');
-
-		startTime = (sessionStorage.getItem('originalStartTime') === null ? startTime : new Date(sessionStorage.getItem('originalStartTime')));
-
-
-
-        var errorTracker = "";
-		var bookmarkValue = "";
-       
-
-        var report;
-
-		
-
-        //added by SergeiG 5/4/2018 to embed a report
-
-        function EmbedReport() {
-
-
-            if(errorTracker.length != 0) return;
-
-
-
-            if(report!=undefined) report.off("rendered");
-
-
-			if (loadCounter > 0)
-			{
-				var divCounter = document.getElementById('LoadReportCounter');
-				var pageNametext = JSON.stringify(pageName); //MK
-				var bookmarktext = JSON.stringify(bookmarkValue); //MK
-				var filtertext = JSON.stringify(filterValue.filters); //MK
-				var slicertext = JSON.stringify(filterValue.slicers); //MK
-				var currentDuration = Math.round((new Date() - runTime) - (thinkTimeSeconds*1000)) / 1000; //MK
-				runTime = new Date(); //MK
-				var totalElapsed = (new Date() - startTime);
-				var totalThinkTime = thinkTimeSeconds * (loadCounter) * 1000;
-				var avgDuration = Math.round((totalElapsed - totalThinkTime) / loadCounter) / 1000;
-				divCounter.innerHTML = 
-				"Report id: " + reportId + "<br>"//MK
-				+ "Instance id: " + instanceID + "<br>"//MK
-				+ "Run Time: " + runTime + "<br>"//MK
-				+ loadCounter +"/"+ numberOfViews + " refreshes<br/>" //MK
-				+ currentDuration + " seconds refresh time<br/>" //MK
-				 + avgDuration + " seconds average refresh time<br/>"
-				 + thinkTimeSeconds + " seconds think time<br>" 
-				 + "Displayed page: "  + pageNametext + "<br>" //MK
-				 + "Applied bookmark: "  + bookmarkValue + "<br>" //MK
-				 + "Applied filters: " + filtertext + "<br>" //MK
-				 + "Applied slicers:"  + slicertext + "<br>"  //MK
-				 + "Project Name: " + projectName + "<br>"; //MK
-				 CefSharp.PostMessage(divCounter.innerHTML); //Writeback
-			}
-
-            // Get models (models contains enums)
-
-            var models = window['powerbi-client'].models;
-
-			var filterCounter = Math.floor(loadCounter / bookmarkList.length) % filtersCount;
-			var bookmarkCounter = loadCounter % bookmarkList.length;
-			bookmarkValue = bookmarkList[bookmarkCounter];
-			if (filtersList != null)
-			{
-				if (isNaN(filterCounter))
-				{
-					filterValue = {
-						slicers: [],
-						filters: []
-					};
-				}
-				else
-				{
-					filterValue = filtersList[filterCounter];
-				}
-			}
-			else if (bookmarkCounter == 0) //only increment the next filter value when we are at the first bookmark
-			{
-				filterValue = filterValue < filterMax ? ++filterValue : filterStart;            
-			}
-
-
-
-
-            //incrementing filter value; restarting if hit numeric filter max
-
-            //TODO: adjust value for your specific filter range
-
-            //filterValue < filterMax ? ++filterValue : filterStart;            
-
-
-
-            // Embed configuration is used to describe what and how to embed
-
-            // This object is used when calling powerbi.embed
-
-            // It can also include settings and options such as filters
-
-            // See java script documentation on GitHub for settings value details
-
-            var config = {
-
-                    type: 'report',
-
-                    tokenType: models.TokenType.Aad,
-
-                    accessToken: PBIEtoken,
-
-                    embedUrl: embedUrl,
-
-                    id: reportId,
-
-                    filters: filterValue.filters,
-					
-					slicers: filterValue.slicers,
-					pageName: pageName,
-					bookmark: { name: bookmarkValue },
-
-                    settings: {
-
-                        filterPaneEnabled: true,
-
-                        navContentPaneEnabled: true,
-						
-                        layoutType: models.LayoutType[layoutType],
-						
-						panes: { //MK add bookmarks and filter panes
-									bookmarks: {
-										visible: true
-									},
-									filters: {
-										expanded: true,
-										visible: true
-									}
-									
-								} //MK
-
-                    }
-
-                };
-
-
-
-
-            // Embed the report within the div element    
-			var justFlipBookmark = true;
-
-			if (bookmarkCounter == 0 || report == undefined)
-			{
-				if (loadCounter < numberOfViews) { //MK view limit
-					report = powerbi.embed(embedDiv, config);
-				} //MK
-				justFlipBookmark = false;
-			}
-			
-
-
-            //handling report load error
-
-            report.on("error", function (event) {
-
-                var divCounter = document.getElementById('LoadReportCounter');
-
-                var currentTime = new Date().toTimeString();
-
-                divCounter.innerHTML = divCounter.innerHTML
-
-                    + "<br/>[Error at " + currentTime + "] "
-
-                    + event.detail.detailedMessage + " "
-
-                    + event.detail.errorCode;
-					
-
-
-                report.off("error");
-
-                //setting error tracker to stop the execution
-
-                errorTracker = event.detail.message;
-				CefSharp.PostMessage(divCounter.innerHTML); //Writeback
-            });           
-
-
-
-            report.on("rendered",function() { setTimeout("EmbedReport()",thinkTimeSeconds*1000) });
-
-
-			if (justFlipBookmark)
-			{
-				report.bookmarksManager.apply(bookmarkValue);
-			}
-
-            //display report URL           
-
-            //var taInfo = document.getElementById('ReportURL');
-
-            //taInfo.value = embedUrl;
-
-            //display PBIE token
-
-            //var divToken = document.getElementById('ADALToken');
-
-            //divToken.value = PBIEtoken;            
-
-
-
-            //display counter            
-
-            loadCounter++;
-
-
-            // Compute metrics for the current refresh:
-            var currentTime = new Date();
-            // Calculate current refresh duration in seconds (subtracting thinkTime)
-            var currentDuration = Math.round(((currentTime - runTime) - (thinkTimeSeconds*1000)) / 1000);
-            runTime = currentTime;
-            var totalElapsed = currentTime - startTime;
-            var totalThinkTime = thinkTimeSeconds * (loadCounter - 1) * 1000;
-            var avgDuration = Math.round((totalElapsed - totalThinkTime) / loadCounter) / 1000;
-
-            // Update the metrics table cells with calculated values
-            updateMetricsTable(reportId, instanceID, loadCounter, numberOfViews, runTime, currentDuration, avgDuration, thinkTimeSeconds, pageNametext, bookmarkValue, filtertext, slicertext, projectName);
-
-            if((loadCounter % sessionRestart) === 0) {
-                sessionStorage.setItem('reloadCounter', loadCounter);      
-                sessionStorage.setItem('originalStartTime', startTime);                        
-                location.reload(false);
-            };           
-
-        } 
-
-
-
-        //NOTE: can use report.reload() or report.refresh()
-
-               
-
-        //REGION: helper functions
-
-        //NOTE: helper function to extract qs parameter by name
-
-        function GetQSParam (name,url) {
-
-            var results = new RegExp('[\?&]' + name + '=([^&#]*)')
-
-                .exec(url);
-
-            if (results == null) {
-
-                return 0;
-
-            }
-
-            return results[1] || 0;
-
+        .auth-banner {
+            background: #fff3cd;
+            border-left: 4px solid #ffc107;
+            color: #664d03;
+            padding: 0.75rem 1rem;
+            border-radius: 4px;
+            margin: 0 0 1rem 0;
+            font-size: 0.95rem;
         }
 
+        .auth-banner.error { background: #f8d7da; border-left-color: #dc3545; color: #842029; }
 
+        .signin-btn {
+            display: inline-block;
+            background: #0078d4;
+            color: white;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            font-size: 1rem;
+            font-family: 'Segoe UI', Arial, sans-serif;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 0 0 1rem 0;
+        }
+        .signin-btn:hover { background: #106ebe; }
+        .signin-btn:disabled { background: #999; cursor: not-allowed; }
 
-        //END REGION: helper functions
+        .setup-panel {
+            background: #fff;
+            padding: 1.5rem 2rem;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin: 1rem 0;
+            max-width: 760px;
+        }
+        .setup-panel h2 { margin-top: 0; color: #2c3e50; }
+        .setup-help { color: #555; font-size: 0.9rem; margin-bottom: 1.5rem; }
+        .setup-row { display: flex; align-items: center; margin-bottom: 0.75rem; }
+        .setup-row label { width: 200px; font-weight: 600; }
+        .setup-row select, .setup-row input {
+            flex: 1;
+            padding: 0.5rem;
+            font-family: 'Segoe UI', Arial, sans-serif;
+            font-size: 0.95rem;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+        .setup-row select:disabled, .setup-row input:disabled {
+            background: #f0f0f0; color: #888;
+        }
+        .setup-error { display: block; color: #842029; background: #f8d7da;
+                       border-left: 4px solid #dc3545; padding: 0.5rem 1rem;
+                       border-radius: 4px; margin-top: 1rem; font-size: 0.9rem; }
+    </style>
 
+    <!-- Vendored JS libraries (no external CDN required at runtime) -->
+    <!-- Source: https://cdn.jsdelivr.net/npm/powerbi-client@2.23.1/dist/powerbi.min.js -->
+    <script src="lib/powerbi-client-2.23.1.min.js"></script>
+    <!-- Source: https://cdn.jsdelivr.net/npm/@azure/msal-browser@3.27.0/lib/msal-browser.min.js -->
+    <script src="lib/msal-browser-3.27.0.min.js"></script>
 
+    <!-- Scenario config (assigns global: reportParameters). MSAL provides the access token. -->
+    <script src="PBIReport.json"></script>
 
+    <script>
+        // ============================================================
+        // Realistic Load Test
+        // ============================================================
+        const TOOL_VERSION = '0.8.0';
+        const SCHEMA_VERSION = 1;
+
+        // ---------- Globals ----------
+        const startTime = new Date();
+        let runTime = startTime;
+        const instanceID = Math.floor(Math.random() * 10_000_000) + 1;
+
+        // Shared run ID (per launch of Run_Load_Test_Only.ps1 or sessionStorage-scoped browser session)
+        let runId = sessionStorage.getItem('runId');
+        if (!runId) {
+            runId = startTime.toISOString().replace(/[:.]/g, '-').slice(0, 19) +
+                    '-r' + Math.random().toString(36).slice(2, 7);
+            sessionStorage.setItem('runId', runId);
+        }
+
+        // Scenario config from PBIReport.json. These are `let` (not `const`) because
+        // the in-page Setup picker can override them when PBIReport.json has no reportUrl.
+        let embedUrl         = reportParameters.reportUrl;
+        let numberOfViews    = reportParameters.numberOfViews ?? 50;
+        let projectName      = reportParameters.projectName ?? '';
+        const sessionRestart = reportParameters.sessionRestart ?? 100;
+        let thinkTimeSeconds = reportParameters.thinkTimeSeconds ?? 0;
+        let pageName         = reportParameters.pageName ?? null;
+        const layoutType     = reportParameters.layoutType ?? 'Master';
+
+        // Embed URL params (re-extracted after Setup picker overrides embedUrl)
+        let reportId    = getQSParam('reportId', embedUrl) || null;
+        let workspaceId = getQSParam('groupId', embedUrl) || null;
+
+        // ---------- Filter / slicer combinatorics (preserved verbatim from v0.7.1) ----------
+        let filterStart = reportParameters.filterStart;
+        let filterValue = { filters: [], slicers: [] };
+        let filterMax = reportParameters.filterMax;
+
+        let filtersList = Array(0);
+        if (reportParameters.filters != undefined) {
+            const arrFilterCounter = Array(reportParameters.filters.length);
+            let filterCombinations = 1;
+            for (let i = 0; i < reportParameters.filters.length; i++) {
+                filterCombinations = filterCombinations * reportParameters.filters[i].filtersList.length;
+                arrFilterCounter[i] = 0;
+            }
+
+            filtersList = Array(filterCombinations);
+            for (let i = 0; i < filterCombinations; i++) {
+                filtersList[i] = { slicers: [], filters: [] };
+                for (let j = 0; j < reportParameters.filters.length; j++) {
+                    const v = reportParameters.filters[j].filtersList[arrFilterCounter[j]];
+
+                    const filter = {
+                        $schema: "http://powerbi.com/product/schema#basic",
+                        target: {
+                            table: reportParameters.filters[j].filterTable,
+                            column: reportParameters.filters[j].filterColumn
+                        },
+                        operator: "In",
+                        values: (v != null ? (Array.isArray(v) ? v : [v]) : reportParameters.filters[j].filtersList.filter(function(a) { return a != null; })),
+                        filterType: 1
+                    };
+
+                    const slicer = {
+                        selector: {
+                            $schema: "http://powerbi.com/product/schema#slicerTargetSelector",
+                            target: {
+                                table: reportParameters.filters[j].filterTable,
+                                column: reportParameters.filters[j].filterColumn
+                            }
+                        },
+                        state: {
+                            filters: [{
+                                $schema: "http://powerbi.com/product/schema#basic",
+                                target: {
+                                    table: reportParameters.filters[j].filterTable,
+                                    column: reportParameters.filters[j].filterColumn
+                                },
+                                operator: "In",
+                                values: (v != null ? (Array.isArray(v) ? v : [v]) : reportParameters.filters[j].filtersList.filter(function(a) { return a != null; }))
+                            }]
+                        }
+                    };
+
+                    if (reportParameters.filters[j].isSlicer) filtersList[i].slicers.push(slicer);
+                    else filtersList[i].filters.push(filter);
+                }
+                for (let z = reportParameters.filters.length - 1; z >= 0; z--) {
+                    if (arrFilterCounter[z] + 1 < reportParameters.filters[z].filtersList.length) {
+                        arrFilterCounter[z]++;
+                        z = -1;
+                    } else {
+                        arrFilterCounter[z] = 0;
+                    }
+                }
+            }
+        }
+
+        function shuffleArray(array) {
+            for (let i = array.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [array[i], array[j]] = [array[j], array[i]];
+            }
+        }
+
+        let filtersCount = filterMax - filterStart;
+        if (filtersList != null) {
+            filterStart = 0;
+            filterMax = filtersList.length;
+            filtersCount = filterMax;
+            shuffleArray(filtersList);
+        }
+
+        let bookmarkList = reportParameters.bookmarkList;
+        if (bookmarkList == null || bookmarkList == undefined || bookmarkList == "") {
+            bookmarkList = [""];
+        }
+
+        // ---------- Persisted load counter (sessionRestart flow) ----------
+        let loadCounter = parseInt(sessionStorage.getItem('reloadCounter') || '0', 10);
+        const savedStart = sessionStorage.getItem('originalStartTime');
+        const effectiveStartTime = savedStart ? new Date(savedStart) : startTime;
+
+        // ---------- Cycle state ----------
+        let errorTracker = '';
+        let bookmarkValue = '';
+        let report;
+        let filterCounter = 0;
+        let bookmarkCounter = 0;
+        // First render after a fresh page load is flagged so downstream analysis
+        // can isolate cold-start cost (auth + SDK init + first iframe load) from
+        // steady-state refresh time. Resets to true on every page reload (including
+        // the periodic sessionRestart reload) because each is a fresh user experience.
+        let isFirstRender = true;
+
+        // ============================================================
+        // Auth: MSAL only (legacy PBIToken.json path removed in v0.8 — see backlog T5b).
+        // CefSharp/Run_Load_Test_Only.ps1 multi-window concurrency does not work with
+        // MSAL (file:// redirect URI rejected by Entra) and must wait for v1.0 Playwright.
+        // ============================================================
+        let msalApp = null;
+        let authConfig = null;
+        let PBIEtoken = '';
+
+        async function initAuth() {
+            try {
+                const res = await fetch('auth-config.json', { cache: 'no-store' });
+                if (!res.ok) throw new Error('no auth-config.json');
+                const cfg = await res.json();
+                if (!cfg.clientId || cfg.clientId === '00000000-0000-0000-0000-000000000000') {
+                    throw new Error('auth-config.json has placeholder clientId');
+                }
+                authConfig = cfg;
+                msalApp = new msal.PublicClientApplication({
+                    auth: {
+                        clientId: cfg.clientId,
+                        authority: 'https://login.microsoftonline.com/' + cfg.tenantId,
+                        redirectUri: cfg.redirectUri || window.location.origin
+                    },
+                    cache: {
+                        cacheLocation: 'localStorage',
+                        storeAuthStateInCookie: false
+                    }
+                });
+                await msalApp.initialize();
+                console.log('[v' + TOOL_VERSION + '] MSAL ready, tenant=' + cfg.tenantId);
+            } catch (e) {
+                console.error('[v' + TOOL_VERSION + '] MSAL initialization failed: ' + e.message);
+                msalApp = null;
+            }
+        }
+
+        // Silent-only acquisition. Never opens a popup. Used at bootstrap (browsers
+        // block load-time popups — see backlog T5a / MEMORY.md) and at runtime by the
+        // SDK's accessTokenProvider hook. Returns null on miss; caller decides whether
+        // to prompt the user via acquireTokenInteractive (which must be click-driven).
+        async function acquireTokenSilent() {
+            if (!msalApp) return null;
+            try {
+                const accounts = msalApp.getAllAccounts();
+                if (accounts.length === 0) return null;
+                msalApp.setActiveAccount(accounts[0]);
+                const result = await msalApp.acquireTokenSilent({
+                    scopes: authConfig.scopes,
+                    account: accounts[0]
+                });
+                return result.accessToken;
+            } catch (err) {
+                console.warn('MSAL silent acquisition failed:', err && err.message ? err.message : err);
+                return null;
+            }
+        }
+
+        // Interactive acquisition. Opens a popup. MUST be called from a user-gesture
+        // handler (click/keypress) — modern browsers block popups otherwise.
+        async function acquireTokenInteractive() {
+            if (!msalApp) return null;
+            try {
+                const result = await msalApp.acquireTokenPopup({ scopes: authConfig.scopes });
+                msalApp.setActiveAccount(result.account);
+                return result.accessToken;
+            } catch (err) {
+                console.warn('MSAL interactive acquisition failed:', err && err.message ? err.message : err);
+                return null;
+            }
+        }
+
+        // SDK eventHook: called by powerbi-client a few minutes before token expiry.
+        // Silent-only — popping up a sign-in window mid-test would be hostile.
+        async function tokenProvider() {
+            const t = await acquireTokenSilent();
+            if (!t) emitMetric({ event: 'auth_failure', errorDetail: 'tokenProvider returned null' });
+            return t; // SDK contract: return null on failure, never throw
+        }
+
+        // ============================================================
+        // Metric emission (JSONL)
+        // ============================================================
+        function emitMetric(extras) {
+            const metric = Object.assign({
+                ts: new Date().toISOString(),
+                runId,
+                instanceId: instanceID,
+                projectName,
+                workspaceId,
+                reportId,
+                pageName,
+                bookmark: bookmarkValue || null,
+                filters: filterValue.filters,
+                slicers: filterValue.slicers,
+                view: { current: loadCounter, target: numberOfViews },
+                thinkTimeSec: thinkTimeSeconds
+            }, extras || {});
+            const json = JSON.stringify(metric);
+            // Console output — captured by Playwright in v2.0; also visible in DevTools.
+            console.log('METRIC ' + json);
+            // CefSharp.PostMessage backwards compat: keeps existing ChromeWriteBack writeback working.
+            try { if (typeof CefSharp !== 'undefined') CefSharp.PostMessage(json); } catch (e) { /* not in CefSharp */ }
+            updateMetricsTable(metric);
+            return metric;
+        }
+
+        function updateMetricsTable(m) {
+            setText('projectNameCell',   m.projectName || '—');
+            setText('reportIdCell',      m.reportId || '—');
+            setText('pageNameCell',      m.pageName || '—');
+            setText('instanceIdCell',    String(m.instanceId));
+            setText('refreshCounterCell', m.view.current + '/' + m.view.target);
+            if (typeof m.durationMs === 'number') {
+                const label = (m.durationMs / 1000).toFixed(2) + ' s' +
+                              (m.isFirstRender ? ' (cold start)' : '');
+                setText('currentDurationCell', label);
+            }
+            setText('totalTimeCell', formatDuration(new Date() - effectiveStartTime));
+            setText('bookmarkCell',  m.bookmark || '—');
+            setText('filtersCell',   summarize(m.filters) + ' / ' + summarize(m.slicers));
+            setText('eventCell',     m.event || '—');
+        }
+
+        function setText(id, text) {
+            const el = document.getElementById(id);
+            if (el) el.textContent = text;
+        }
+
+        function summarize(arr) {
+            if (!arr || arr.length === 0) return '[]';
+            return '[' + arr.length + ']';
+        }
+
+        function formatDuration(ms) {
+            const s = Math.floor(ms / 1000);
+            const h = Math.floor(s / 3600);
+            const m = Math.floor((s % 3600) / 60);
+            const sec = s % 60;
+            return h + ':' + String(m).padStart(2, '0') + ':' + String(sec).padStart(2, '0');
+        }
+
+        // ============================================================
+        // Embed loop
+        // ============================================================
+        function EmbedReport() {
+            // T6 fix: hard-stop at the configured view count (was off-by-one in v0.7.1)
+            if (loadCounter >= numberOfViews) {
+                emitMetric({ event: 'view_limit_reached' });
+                return;
+            }
+            if (errorTracker.length !== 0) return;
+            if (report !== undefined) report.off('rendered');
+
+            // Compute filter / bookmark for this cycle
+            filterCounter   = Math.floor(loadCounter / bookmarkList.length) % filtersCount;
+            bookmarkCounter = loadCounter % bookmarkList.length;
+            bookmarkValue   = bookmarkList[bookmarkCounter];
+            if (filtersList != null) {
+                filterValue = isNaN(filterCounter) ? { filters: [], slicers: [] } : filtersList[filterCounter];
+            }
+
+            const models = window['powerbi-client'].models;
+
+            const config = {
+                type: 'report',
+                tokenType: models.TokenType.Aad,
+                accessToken: PBIEtoken,           // initial token; SDK refreshes via eventHooks below
+                embedUrl,
+                id: reportId,
+                filters: filterValue.filters,
+                slicers: filterValue.slicers,
+                pageName: pageName,
+                bookmark: bookmarkValue ? { name: bookmarkValue } : undefined,
+                settings: {
+                    filterPaneEnabled: true,
+                    navContentPaneEnabled: true,
+                    layoutType: models.LayoutType[layoutType],
+                    panes: {
+                        bookmarks: { visible: true },
+                        filters:   { expanded: true, visible: true }
+                    }
+                }
+            };
+            // Wire silent refresh only when MSAL is active. SDK >= 2.20.1.
+            if (msalApp) {
+                config.eventHooks = { accessTokenProvider: tokenProvider };
+            }
+
+            const justFlipBookmark = bookmarkCounter !== 0 && report !== undefined;
+            if (!justFlipBookmark) {
+                report = powerbi.embed(embedDiv, config);
+            }
+
+            report.off('error');
+            report.on('error', function (event) {
+                emitMetric({
+                    event: 'error',
+                    errorDetail: (event.detail && event.detail.detailedMessage) || String(event.detail || event),
+                    errorCode:   (event.detail && event.detail.errorCode) || ''
+                });
+                errorTracker = (event.detail && event.detail.message) || 'error';
+                report.off('error');
+            });
+
+            report.off('rendered');
+            report.on('rendered', function () {
+                const now = new Date();
+                const currentMs = (now - runTime) - (thinkTimeSeconds * 1000);
+                runTime = now;
+                loadCounter++;
+                emitMetric({
+                    event: 'rendered',
+                    isFirstRender: isFirstRender,
+                    durationMs: Math.max(0, Math.round(currentMs))
+                });
+                isFirstRender = false;
+
+                // Periodic full-tab reload to mitigate long-session iframe memory leaks
+                if (loadCounter % sessionRestart === 0) {
+                    sessionStorage.setItem('reloadCounter', String(loadCounter));
+                    sessionStorage.setItem('originalStartTime', effectiveStartTime.toISOString());
+                    location.reload(false);
+                    return;
+                }
+                setTimeout(EmbedReport, thinkTimeSeconds * 1000);
+            });
+
+            if (justFlipBookmark) {
+                report.bookmarksManager.apply(bookmarkValue);
+            }
+        }
+
+        // ============================================================
+        // Bootstrap
+        // ============================================================
+        (async function bootstrap() {
+            await initAuth();
+            updateAuthBanner();
+            PBIEtoken = await acquireTokenSilent();
+            if (PBIEtoken) {
+                await proceedAfterAuth();
+                return;
+            }
+            if (msalApp) {
+                // Silent miss (no cached account, or silent refresh failed). Don't
+                // auto-popup — browsers block load-time popups. Wait for a user click.
+                showSignInButton();
+                return;
+            }
+            // MSAL is required in v0.8 — no fallback path.
+            showAuthError('Authentication required. Configure auth-config.json with your Entra app registration — see _Documentation/MSAL-app-registration.md.');
+            emitMetric({ event: 'auth_failure', errorDetail: 'MSAL not configured at bootstrap' });
+        })();
+
+        function proceedWithEmbed() {
+            emitMetric({ event: 'loaded' });
+            EmbedReport();
+        }
+
+        // After auth: if a real reportUrl is configured, embed immediately;
+        // otherwise show the in-page Setup picker (workspace → report → run).
+        async function proceedAfterAuth() {
+            if (embedUrl && embedUrl.trim() !== '') {
+                proceedWithEmbed();
+            } else {
+                await showSetupPanel(PBIEtoken);
+            }
+        }
+
+        // ============================================================
+        // In-page Setup picker (T7b — MVP of B2)
+        // Shown when PBIReport.json has no reportUrl. Mirrors the original
+        // PowerShell Setup_Load_Test.ps1 workspace/report flow, but in-browser.
+        // Uses the user's MSAL bearer token to call the Power BI REST API directly.
+        // ============================================================
+        async function pbiFetch(token, path) {
+            const res = await fetch('https://api.powerbi.com/v1.0/myorg' + path, {
+                headers: { Authorization: 'Bearer ' + token, Accept: 'application/json' }
+            });
+            if (!res.ok) {
+                const body = await res.text().catch(() => '');
+                throw new Error(res.status + ' ' + res.statusText + (body ? ' — ' + body.slice(0, 300) : ''));
+            }
+            return res.json();
+        }
+
+        async function showSetupPanel(token) {
+            const panel = document.getElementById('setupPanel');
+            const wsSelect = document.getElementById('workspaceSelect');
+            const reportSelect = document.getElementById('reportSelect');
+            const startBtn = document.getElementById('startTestBtn');
+            const errEl = document.getElementById('setupError');
+
+            panel.style.display = 'block';
+            document.getElementById('embedDiv').style.display = 'none';
+
+            const showErr = (msg) => { errEl.style.display = 'block'; errEl.textContent = msg; };
+            const clearErr = () => { errEl.style.display = 'none'; errEl.textContent = ''; };
+
+            // Load workspaces
+            try {
+                const data = await pbiFetch(token, '/groups?$top=1000');
+                const ws = (data.value || []).slice().sort((a, b) => a.name.localeCompare(b.name));
+                if (ws.length === 0) { showErr('No workspaces returned. You may not be a member of any group workspace.'); return; }
+                wsSelect.innerHTML = '<option value="">Select workspace…</option>' +
+                    ws.map(w => '<option value="' + escapeHtml(w.id) + '">' + escapeHtml(w.name) + '</option>').join('');
+                wsSelect.disabled = false;
+            } catch (e) {
+                showErr('Failed to list workspaces: ' + e.message +
+                    ' — your app registration likely lacks the Workspace.Read.All scope (delegated, admin-consented). See _Documentation/MSAL-app-registration.md.');
+                return;
+            }
+
+            const reportMap = new Map();
+
+            wsSelect.onchange = async () => {
+                clearErr();
+                startBtn.disabled = true;
+                reportSelect.disabled = true;
+                reportMap.clear();
+                if (!wsSelect.value) {
+                    reportSelect.innerHTML = '<option>Pick a workspace first</option>';
+                    return;
+                }
+                reportSelect.innerHTML = '<option>Loading reports…</option>';
+                try {
+                    const data = await pbiFetch(token, '/groups/' + encodeURIComponent(wsSelect.value) + '/reports');
+                    const reports = (data.value || []).slice().sort((a, b) => a.name.localeCompare(b.name));
+                    if (reports.length === 0) {
+                        reportSelect.innerHTML = '<option>No reports in this workspace</option>';
+                        return;
+                    }
+                    reports.forEach(r => reportMap.set(r.id, r));
+                    reportSelect.innerHTML = '<option value="">Select report…</option>' +
+                        reports.map(r => '<option value="' + escapeHtml(r.id) + '">' + escapeHtml(r.name) + '</option>').join('');
+                    reportSelect.disabled = false;
+                } catch (e) {
+                    reportSelect.innerHTML = '<option>Failed to load reports</option>';
+                    showErr('Failed to list reports: ' + e.message);
+                }
+            };
+
+            reportSelect.onchange = () => { startBtn.disabled = !reportSelect.value; };
+
+            startBtn.onclick = () => {
+                const rep = reportMap.get(reportSelect.value);
+                if (!rep) return;
+                // Override module-scope config from picker selections
+                embedUrl         = rep.embedUrl;
+                reportId         = rep.id;
+                workspaceId      = wsSelect.value;
+                numberOfViews    = parseInt(document.getElementById('viewsInput').value, 10) || 10;
+                thinkTimeSeconds = parseInt(document.getElementById('thinkTimeInput').value, 10) || 3;
+                projectName      = (document.getElementById('projectInput').value || 'ad-hoc').trim();
+
+                panel.style.display = 'none';
+                document.getElementById('embedDiv').style.display = 'block';
+                proceedWithEmbed();
+            };
+        }
+
+        function escapeHtml(s) {
+            return String(s)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
+        function showSignInButton() {
+            const btn = document.getElementById('signinBtn');
+            if (!btn) return;
+            btn.style.display = 'inline-block';
+            btn.disabled = false;
+            btn.textContent = 'Sign in with Microsoft';
+            const banner = document.getElementById('authBanner');
+            if (banner) {
+                banner.classList.remove('error');
+                banner.style.display = 'block';
+                banner.textContent = 'Click "Sign in with Microsoft" below to authenticate. ' +
+                                     'After the first sign-in, the token is cached and future page loads are silent.';
+            }
+            btn.onclick = async () => {
+                btn.disabled = true;
+                btn.textContent = 'Signing in…';
+                PBIEtoken = await acquireTokenInteractive();
+                if (!PBIEtoken) {
+                    showAuthError('Sign-in failed. Open DevTools console for the MSAL error, then click Retry.');
+                    btn.disabled = false;
+                    btn.textContent = 'Retry sign in';
+                    emitMetric({ event: 'auth_failure', errorDetail: 'interactive sign-in returned null' });
+                    return;
+                }
+                btn.style.display = 'none';
+                const banner = document.getElementById('authBanner');
+                if (banner) banner.style.display = 'none';
+                await proceedAfterAuth();
+            };
+        }
+
+        function updateAuthBanner() {
+            const el = document.getElementById('authBanner');
+            if (!el) return;
+            // MSAL is the only auth path in v0.8. Banner only shows on error (handled in showAuthError).
+            el.style.display = 'none';
+        }
+
+        function showAuthError(msg) {
+            const el = document.getElementById('authBanner');
+            if (!el) return;
+            el.classList.add('error');
+            el.style.display = 'block';
+            el.textContent = msg;
+        }
+
+        // ---------- Helpers ----------
+        function getQSParam(name, url) {
+            const m = new RegExp('[?&]' + name + '=([^&#]*)').exec(url || '');
+            return m ? decodeURIComponent(m[1]) : null;
+        }
     </script>
-
-
-
 </head>
 
 <body>
     <header class="header">
-        <h1>Realistic User Testing Tool Enhanced</h1>
+        <h1>Realistic Load Test Tool</h1>
     </header>
+
+    <div id="authBanner" class="auth-banner" style="display: none;"></div>
+    <button id="signinBtn" class="signin-btn" type="button" style="display: none;">Sign in with Microsoft</button>
+
+    <div id="setupPanel" class="setup-panel" style="display: none;">
+        <h2>Setup Load Test</h2>
+        <p class="setup-help">No <code>reportUrl</code> configured in <code>PBIReport.json</code> — pick a workspace and report below to run an ad-hoc test. For repeatable scenarios with filters, slicers, and bookmarks, use <code>Setup_Load_Test.ps1</code> (writes a reusable subfolder).</p>
+
+        <div class="setup-row">
+            <label for="workspaceSelect">Workspace:</label>
+            <select id="workspaceSelect" disabled><option>Loading workspaces…</option></select>
+        </div>
+        <div class="setup-row">
+            <label for="reportSelect">Report:</label>
+            <select id="reportSelect" disabled><option>Pick a workspace first</option></select>
+        </div>
+        <div class="setup-row">
+            <label for="viewsInput">Number of views:</label>
+            <input type="number" id="viewsInput" value="10" min="1" max="100000" />
+        </div>
+        <div class="setup-row">
+            <label for="thinkTimeInput">Think time (seconds):</label>
+            <input type="number" id="thinkTimeInput" value="3" min="0" max="600" />
+        </div>
+        <div class="setup-row">
+            <label for="projectInput">Project name:</label>
+            <input type="text" id="projectInput" value="ad-hoc" />
+        </div>
+        <button id="startTestBtn" class="signin-btn" type="button" disabled>Start Test</button>
+        <span id="setupError" class="setup-error" style="display: none;"></span>
+    </div>
 
     <div class="metrics-panel">
         <h3>Performance Metrics</h3>
         <table class="metrics-table">
-            <tr>
-                <td>Project Name</td>
-                <td id="projectNameCell">Loading...</td>
-            </tr>
-			<tr>
-                <td>Report ID</td>
-                <td id="reportIdCell">Loading...</td>
-            </tr>           
-			<tr>
-                <td>Page Name</td>
-                <td id="pageNameCell">Loading...</td>
-            </tr>
-            <tr>
-                <td>Instance ID</td>
-                <td id="instanceIdCell">Loading...</td>
-            </tr>
-            <tr>
-                <td>Completed Refreshes</td>
-                <td id="refreshCounterCell">0</td>
-            </tr>
-            <tr>
-                <td>Current Refresh</td>
-                <td id="currentDurationCell">0.00s</td>
-            </tr>
-            <tr>
-                <td>Average Refresh</td>
-                <td id="averageDurationCell">0.00s</td>
-            </tr>
-            <tr>
-                <td>Total Runtime</td>
-                <td id="totalTimeCell">0:00:00</td>
-            </tr>
-            <tr>
-                <td>Active Bookmark</td>
-                <td id="bookmarkCell">Loading...</td>
-            </tr>
-            <tr>
-                <td>Active Filters</td>
-                <td id="filtersCell">Loading...</td>
-            </tr>
-		</table>	
+            <tr><td>Project Name</td>        <td id="projectNameCell">—</td></tr>
+            <tr><td>Report ID</td>           <td id="reportIdCell">—</td></tr>
+            <tr><td>Page Name</td>           <td id="pageNameCell">—</td></tr>
+            <tr><td>Instance ID</td>         <td id="instanceIdCell">—</td></tr>
+            <tr><td>Last Event</td>          <td id="eventCell">—</td></tr>
+            <tr><td>Completed Refreshes</td> <td id="refreshCounterCell">0/0</td></tr>
+            <tr><td>Current Refresh</td>     <td id="currentDurationCell">—</td></tr>
+            <tr><td>Total Runtime</td>       <td id="totalTimeCell">0:00:00</td></tr>
+            <tr><td>Active Bookmark</td>     <td id="bookmarkCell">—</td></tr>
+            <tr><td>Active Filters / Slicers</td> <td id="filtersCell">—</td></tr>
+        </table>
     </div>
-
-    <!--
-	<div id="InfoMessage" style="font-weight:bolder;">Report URL and AAD token:</div>
-
-    <textarea id="ReportURL" wrap="soft" rows="1" readonly style="width:99%;resize:vertical;" visible=0></textarea>
-
-    <textarea id="ADALToken" wrap="soft" rows="3" readonly style="width:99%;resize:vertical;" visible=0></textarea>
-	-->
 
     <hr style="width:99%;" />
 
     <div id="embedDiv" style="height: 800px; width: 100%; max-width: 1200px;"></div>
-	<div id="LoadReportCounter" style="display: none;">Loading report...</div>
-    <footer class="footer">
 
-        Based on PowerBI-Tools-For-Capacities - https://github.com/microsoft/PowerBI-Tools-For-Capacities<br>
-        Further developed by Mihaly Kavasi, Version 0.7.1
+    <footer class="footer">
+        Based on PowerBI-Tools-For-Capacities — https://github.com/microsoft/PowerBI-Tools-For-Capacities<br>
+        Further developed by Mihaly Kavasi · Version 0.8.0
     </footer>
 </body>
-
-<script>
-
-
-
-    //NOTE: modified 5/20/19 to address browser flooding when running refresh on timer
-
-    //kicking off report refresh loop based on report render event, i.e., not before 
-
-    //full render cycle completion as may be the case with timer
-
-    if(report==undefined && loadCounter < numberOfViews) EmbedReport();  //MK
-
-
-
-</script>
-
-<script>
-    // Helper function to update the metrics table cells
-    function updateMetricsTable(reportId, instanceID, loadCounter, numberOfViews, runTime, currentDuration, avgDuration, thinkTimeSeconds, pageNametext, bookmarkValue, filtertext, slicertext, projectName) {
-        document.getElementById("reportIdCell").innerHTML = reportId;
-        document.getElementById("instanceIdCell").innerHTML = instanceID;
-        document.getElementById("refreshCounterCell").innerHTML = loadCounter + "/" + numberOfViews;
-        document.getElementById("currentDurationCell").innerHTML = currentDuration + " seconds";
-        document.getElementById("averageDurationCell").innerHTML = avgDuration + " seconds";
-        
-        // Compute formatted total runtime (HH:MM:SS)
-        var totalElapsed = new Date() - startTime;
-        var totalSeconds = Math.floor(totalElapsed / 1000);
-        var hours = Math.floor(totalSeconds / 3600);
-        var minutes = Math.floor((totalSeconds % 3600) / 60);
-        var seconds = totalSeconds % 60;
-        document.getElementById("totalTimeCell").innerHTML = hours + ":" + minutes + ":" + seconds;
-        
-        document.getElementById("bookmarkCell").innerHTML = bookmarkValue;
-        document.getElementById("filtersCell").innerHTML = filtertext + "<br>" + slicertext;
-        
-        // Update additional metrics: page name and project name
-        document.getElementById("pageNameCell").innerHTML = pageNametext;
-        document.getElementById("projectNameCell").innerHTML = projectName;
-    }
-</script>
-
 </html>

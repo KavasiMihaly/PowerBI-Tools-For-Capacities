@@ -2,258 +2,211 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Realistic User Testing Tool Enhanced - Documentation</title>
+    <title>Realistic Load Test Tool — User Guide v0.8.0</title>
     <style>
-        body {
-            font-family: 'Segoe UI', Arial, sans-serif;
-            line-height: 1.6;
-            margin: 2rem;
-            background: #f8f9fa;
-        }
-        
-        .header {
-            background: #2c3e50;
-            color: white;
-            padding: 2rem;
-            border-radius: 8px;
-            margin-bottom: 2rem;
-        }
-        
-        h1, h2, h3 {
-            color: #2c3e50;
-        }
-        
-        .section {
-            background: white;
-            padding: 2rem;
-            border-radius: 8px;
-            margin-bottom: 2rem;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-        
-        code {
-            background: #f4f4f4;
-            padding: 0.2rem 0.4rem;
-            border-radius: 4px;
-            font-family: Consolas, monospace;
-        }
-        
-        pre {
-            background: #f8f9fa;
-            padding: 1rem;
-            border-left: 4px solid #3498db;
-            overflow-x: auto;
-        }
-        
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            margin: 1rem 0;
-        }
-        
-        th, td {
-            border: 1px solid #ddd;
-            padding: 0.8rem;
-            text-align: left;
-        }
-        
-        th {
-            background-color: #2c3e50;
-            color: white;
-        }
-        
-        tr:nth-child(even) {
-            background-color: #f9f9f9;
-        }
-        
-        .header h1 {
-            color: white;
-            margin: 0 0 0.5rem 0;
-            font-size: 2.5rem;
-        }
-        
-        .footer {
-            color: #666;
-            text-align: center;
-            margin-top: 2rem;
-            padding: 1rem;
-        }
-        
-        .config-note {
-            background: #e3f2fd;
-            border-left: 4px solid #2196F3;
-            padding: 1rem;
-            margin: 1rem 0;
-        }
-        
-        .config-matrix td:nth-child(3) code {
-            word-break: break-word;
-            white-space: normal;
-        }
+        body { font-family: 'Segoe UI', Arial, sans-serif; line-height: 1.6; margin: 2rem; background: #f8f9fa; }
+        .header { background: #2c3e50; color: white; padding: 2rem; border-radius: 8px; margin-bottom: 2rem; }
+        h1, h2, h3 { color: #2c3e50; }
+        .header h1 { color: white; margin: 0 0 0.5rem 0; font-size: 2.5rem; }
+        .section { background: white; padding: 2rem; border-radius: 8px; margin-bottom: 2rem; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        code { background: #f4f4f4; padding: 0.2rem 0.4rem; border-radius: 4px; font-family: Consolas, monospace; }
+        pre { background: #f8f9fa; padding: 1rem; border-left: 4px solid #3498db; overflow-x: auto; }
+        table { width: 100%; border-collapse: collapse; margin: 1rem 0; }
+        th, td { border: 1px solid #ddd; padding: 0.8rem; text-align: left; }
+        th { background-color: #2c3e50; color: white; }
+        tr:nth-child(even) { background-color: #f9f9f9; }
+        .footer { color: #666; text-align: center; margin-top: 2rem; padding: 1rem; }
+        .note { background: #e3f2fd; border-left: 4px solid #2196F3; padding: 1rem; margin: 1rem 0; }
+        .warn { background: #fff3cd; border-left: 4px solid #ffc107; padding: 1rem; margin: 1rem 0; }
     </style>
 </head>
 <body>
     <div class="header">
-        <h1>Realistic User Testing Tool Enhanced</h1>
-        <p>Version 0.7.1 | Developed by Mihaly Kavasi</p>
+        <h1>Realistic Load Test Tool</h1>
+        <p>Version 0.8.0 | Modernized fork of <a style="color: #b3d9ff" href="https://github.com/microsoft/PowerBI-Tools-For-Capacities">microsoft/PowerBI-Tools-For-Capacities</a> by Mihaly Kavasi</p>
     </div>
 
     <div class="section">
-        <h2>Table of Contents</h2>
+        <h2>What this is</h2>
+        <p>A browser-driven load-testing tool for Power BI / Fabric capacities. Embeds a Power BI report via the JavaScript SDK and cycles through filter, slicer, bookmark, and page combinations to simulate real users — defeating query cache for realistic uncached renders.</p>
+        <p>Each refresh's wall-clock duration, applied state, and metadata is captured to <code>.jsonl</code> log files for offline analysis. Run multiple browser instances simultaneously to simulate concurrent users.</p>
+    </div>
+
+    <div class="section">
+        <h2>What's new in v0.8.0</h2>
         <ul>
-            <li><a href="#installation">Installation</a></li>
-            <li><a href="#quickstart">Quick Start</a></li>
-            <li><a href="#configuration">Configuration Guide</a></li>
-            <li><a href="#examples">Configuration Examples</a></li>
-            <li><a href="#troubleshooting">Troubleshooting</a></li>
+            <li><strong>Vendored powerbi-client 2.23.1</strong> — replaces dead <code>cdn.rawgit.com</code>. Tool now bootstraps on a clean machine.</li>
+            <li><strong>MSAL.js silent token refresh</strong> — once configured, no more 60-min manual token refreshes.</li>
+            <li><strong>JSONL log output</strong> — structured data instead of HTML-with-<code>&lt;br&gt;</code> separators.</li>
+            <li><strong>Off-by-one fix</strong> — runs stop exactly at <code>numberOfViews</code>, not one past.</li>
+            <li><strong>jQuery removed.</strong></li>
+            <li><strong>Backwards-compatible</strong> — legacy <code>PBIToken.json</code> + <code>Update_Token_Only.ps1</code> path still works.</li>
         </ul>
     </div>
 
+    <div class="section">
+        <h2>Two ways to set up a test</h2>
+        <p>v0.8 supports two flows depending on whether you want a quick ad-hoc test or a repeatable scenario:</p>
+        <table>
+            <tr><th>Use case</th><th>Tool</th><th>Output</th></tr>
+            <tr><td>Quick check — pick a workspace and report, run with default cycling</td><td><strong>In-page Setup picker</strong> (this HTML) — leave <code>PBIReport.json</code> empty</td><td>In-memory only; rerun by reloading the page</td></tr>
+            <tr><td>Repeatable scenario with filters, bookmarks, page navigation, multi-window concurrency</td><td><code>Setup_Load_Test.ps1</code></td><td>Per-test subfolder with populated <code>PBIReport.json</code> and a copy of the HTML</td></tr>
+        </table>
+        <div class="note">
+            The in-page picker requires the <code>Workspace.Read.All</code> delegated scope on your Entra app registration. If your app reg only has <code>Report.Read.All</code>, the picker will show a permission error pointing to <code>_Documentation/MSAL-app-registration.md</code>.
+        </div>
+    </div>
+
     <div class="section" id="installation">
-        <h2>Installation Requirements</h2>
-        <pre><code># Run in elevated PowerShell
+        <h2>Prerequisites</h2>
+        <pre><code># Run in elevated PowerShell (one-time)
 Set-ExecutionPolicy Unrestricted
 Install-Module -Name MicrosoftPowerBIMgmt</code></pre>
+        <p>Plus a modern browser (Chrome / Edge / Firefox).</p>
+    </div>
+
+    <div class="section" id="msal">
+        <h2>One-time: configure MSAL (recommended)</h2>
+        <p>This is the killer v0.8 feature: configure once, then no manual token refreshes ever.</p>
+        <ol>
+            <li>Tenant admin: register a Single-Page Application in Entra ID (full instructions in <code>_Documentation/MSAL-app-registration.md</code>). Note the <strong>Application (client) ID</strong> and <strong>Directory (tenant) ID</strong>.</li>
+            <li>In <code>RealisticLoadTestTool/</code>, copy <code>auth-config.example.json</code> to <code>auth-config.json</code>.</li>
+            <li>Paste your client ID and tenant ID into <code>auth-config.json</code>. (This file is gitignored.)</li>
+            <li>Open <code>RealisticLoadTest.html</code> via <code>http://localhost</code> — NOT <code>file://</code>:
+                <pre><code># From RealisticLoadTestTool/
+python -m http.server 8080
+# Browser: http://localhost:8080/&lt;your-test-folder&gt;/RealisticLoadTest.html</code></pre>
+            </li>
+            <li>Sign in once. The page silently refreshes the token forever after.</li>
+        </ol>
+        <div class="warn">
+            <strong>CefSharp / ChromeWriteBack note:</strong> The existing <code>Run_Load_Test_Only.ps1</code> launcher uses CefSharp, which loads HTML via <code>file://</code>. Entra rejects <code>file://</code> redirect URIs, so windows launched that way fall back to <code>PBIToken.json</code> auth. The MSAL improvement applies to direct-browser-via-localhost usage. v1.0 will replace CefSharp with a Playwright-orchestrated Chromium that supports <code>http://localhost</code>.
+        </div>
     </div>
 
     <div class="section" id="quickstart">
-        <h2>Quick Start Guide</h2>
-        <h3>Basic Workflow</h3>
+        <h2>Workflow</h2>
         <ol>
-            <li>Initialize test setup:
+            <li>Initialize per-report test folders:
                 <pre><code>.\Setup_Load_Test.ps1</code></pre>
+                Prompts for: number of reports, views per report, think time, project name. Generates a subfolder per report (named <code>&lt;Workspace&gt; - &lt;Report&gt; - &lt;timestamp&gt;</code>).
             </li>
-            <li>Update authentication tokens:
+            <li>(Legacy path only) Refresh the token:
                 <pre><code>.\Update_Token_Only.ps1</code></pre>
+                Skip this if you've configured MSAL (see above).
             </li>
-            <li>Run test with 4 instances:
-                <pre><code>.\Run_Load_Test_Only.ps1 -Instances 4</code></pre>
+            <li>Launch the load test (CefSharp multi-window):
+                <pre><code>.\Run_Load_Test_Only.ps1 4</code></pre>
+                Launches 4 browser instances per subfolder.
             </li>
+            <li>Or, for MSAL-enabled single-window testing:
+                <pre><code># From the test subfolder, with localhost server running
+# Open http://localhost:8080/RealisticLoadTest.html in browser</code></pre>
+            </li>
+            <li>Watch the metrics panel and the JSONL flow into <code>Test Results/&lt;run&gt;/&lt;instanceId&gt;.jsonl</code>.</li>
         </ol>
     </div>
 
-    <div class="section" id="configuration">
-        <h2>Configuration Guide</h2>
-        
-        <h3>Key Configuration Files</h3>
-        <p>The tool uses dedicated configuration files to control test behavior:</p>
-        <dl>
-            <dt>📁 PBIReport.JSON</dt>
-            <dd>Controls report parameters including:
-                <ul>
-                    <li>🔘 Filters/Slicers combinations</li>
-                    <li>📖 Bookmark sequences</li>
-                    <li>📄 Report page selection</li>
-                    <li>⏱ Think time between actions</li>
-                    <li>📱 Mobile layout settings</li>
-                </ul>
-            </dd>
-            
-            <dt>📁 PBIToken.JSON</dt>
-            <dd>Manages authentication credentials and access tokens</dd>
-        </dl>
-
-        <div class="config-note">
-            <p>💡 Pro Tip: Edit these files in a JSON-aware editor (VS Code, Notepad++) 
-            to configure different test scenarios without code changes!</p>
-        </div>
-
-        <h3>PBIReport.JSON Structure</h3>
+    <div class="section" id="output">
+        <h2>Output: JSONL schema</h2>
+        <p>Each refresh writes one JSON object per line. Full schema in <code>_Documentation/JSONL-schema.md</code>.</p>
         <pre><code>{
-    "reportUrl": "https://app.powerbi.com/reportEmbed?...",
-    "pageName": "ReportSection123",
-    "bookmarkList": ["Bookmark1a2b3c","Bookmark4d5e6f"],
-    "filters": [
-        {
-            "filterTable": "SalesData",
-            "filterColumn": "Region",
-            "isSlicer": true,
-            "filtersList": ["North","South","East","West"]
-        }
-    ],
-    "thinkTimeSeconds": 5,
-    "sessionRestart": 100,
-    "layoutType": "MobilePortrait"
+  "ts": "2026-05-03T14:23:01.421Z",
+  "event": "rendered",
+  "instanceId": 5992180,
+  "runId": "2026-05-03T14-22-15-r3a7e",
+  "projectName": "capacity-stress-q2",
+  "workspaceId": "7bbb6481-...",
+  "reportId": "ce7dc7f9-...",
+  "pageName": "ReportSection...",
+  "bookmark": "Bookmark...",
+  "filters": [],
+  "slicers": [...],
+  "view": { "current": 3, "target": 15 },
+  "durationMs": { "current": 6101, "average": 5051 },
+  "thinkTimeSec": 1
 }</code></pre>
+        <p>Quick parsing examples:</p>
+        <pre><code># All durations
+jq '.durationMs.current' *.jsonl
 
-        <h3>Core Configuration Capabilities</h3>
-        <table class="config-matrix">
-            <tr>
-                <th>Feature</th>
-                <th>Configuration File</th>
-                <th>Example Value</th>
-            </tr>
-            <tr>
-                <td>Page Selection</td>
-                <td>PBIReport.JSON</td>
-                <td><code>"pageName": "ReportSection123"</code></td>
-            </tr>
-            <tr>
-                <td>Bookmark Sequence</td>
-                <td>PBIReport.JSON</td>
-                <td><code>"bookmarkList": ["BM1","BM2"]</code></td>
-            </tr>
-            <tr>
-                <td>Filter Combinations</td>
-                <td>PBIReport.JSON</td>
-                <td><code>"filtersList": ["North",["East","West"]]</code></td>
-            </tr>
-            <tr>
-                <td>Authentication</td>
-                <td>PBIToken.JSON</td>
-                <td><em>(Auto-generated credentials)</em></td>
-            </tr>
+# Errors
+jq 'select(.event=="error")' *.jsonl
+
+# p95 by bookmark
+jq -s 'group_by(.bookmark) | map({ bookmark: .[0].bookmark, p95: (sort_by(.durationMs.current) | .[length*0.95 | floor].durationMs.current) })' *.jsonl</code></pre>
+    </div>
+
+    <div class="section" id="configuration">
+        <h2>PBIReport.json reference</h2>
+        <pre><code>{
+  "reportUrl": "https://app.powerbi.com/reportEmbed?reportId=...&groupId=...",
+  "pageName": "ReportSection123",
+  "bookmarkList": ["Bookmark1a2b3c","Bookmark4d5e6f"],
+  "filters": [
+    {
+      "filterTable": "SalesData",
+      "filterColumn": "Region",
+      "isSlicer": true,
+      "filtersList": ["North","South","East","West"]
+    }
+  ],
+  "thinkTimeSeconds": 5,
+  "numberOfViews": 50,
+  "sessionRestart": 100,
+  "projectName": "capacity-stress-q2",
+  "layoutType": "Master"
+}</code></pre>
+        <table>
+            <tr><th>Field</th><th>Notes</th></tr>
+            <tr><td><code>numberOfViews</code></td><td>Hard stop after this many refreshes per instance. v0.8 is off-by-one fixed.</td></tr>
+            <tr><td><code>sessionRestart</code></td><td>Every N refreshes, the tab reloads to mitigate iframe memory leaks. 100 is sane.</td></tr>
+            <tr><td><code>layoutType</code></td><td><code>Master</code> / <code>MobilePortrait</code> / <code>MobileLandscape</code></td></tr>
+            <tr><td><code>filters[].isSlicer</code></td><td>true → applied as slicer state; false → as report-level filter</td></tr>
+            <tr><td><code>filters[].filtersList</code></td><td>Each item: single value, array (multi-select), or null at start (= "all non-null in this list")</td></tr>
+            <tr><td><code>pageName</code></td><td>Internal <code>ReportSection&lt;id&gt;</code> — find it in URL when the page is active in app.powerbi.com</td></tr>
+            <tr><td><code>bookmarkList[]</code></td><td>Internal bookmark names — find via URL</td></tr>
+            <tr><td><code>projectName</code></td><td>Free-text tag, propagates into every JSONL row for traceability</td></tr>
         </table>
     </div>
 
     <div class="section" id="examples">
-        <h2>Configuration Examples</h2>
-        <h3>Multi-Select Filters</h3>
-        <pre><code>"filtersList": [
-    ["North","South"], 
-    "East", 
-    ["West","Central"]
-]</code></pre>
-
-        <h3>Mobile Testing</h3>
+        <h2>Examples</h2>
+        <h3>Multi-select filter</h3>
+        <pre><code>"filtersList": [["North","South"], "East", ["West","Central"]]</code></pre>
+        <p>3 cycles: cycle 1 = multi-select North+South; cycle 2 = single East; cycle 3 = multi-select West+Central.</p>
+        <h3>Mobile testing</h3>
         <pre><code>"layoutType": "MobileLandscape"</code></pre>
     </div>
 
     <div class="section" id="troubleshooting">
-        <h2>Troubleshooting Guide</h2>
+        <h2>Troubleshooting</h2>
         <table>
-            <tr>
-                <th>Issue</th>
-                <th>Solution</th>
-            </tr>
-            <tr>
-                <td>Blank report display</td>
-                <td>Run <code>Update_Token_Only.ps1</code> to refresh credentials</td>
-            </tr>
-            <tr>
-                <td>High CPU usage</td>
-                <td>Reduce number of instances in Run_Load_Test_Only.ps1</td>
-            </tr>
-            <tr>
-                <td>JSON parsing errors</td>
-                <td>Validate PBIReport.JSON syntax using JSON validator</td>
-            </tr>
+            <tr><th>Issue</th><th>Solution</th></tr>
+            <tr><td>Page is blank, no metrics</td><td>Open DevTools → Console. Look for <code>[v0.8.0] MSAL not configured</code> or token errors. If MSAL: verify <code>auth-config.json</code> values + redirect URI. If legacy: run <code>Update_Token_Only.ps1</code>.</td></tr>
+            <tr><td>AADSTS50011 redirect URI mismatch</td><td>The URL the page is served from isn't in the SPA app's redirect URI list. Add it (Entra → App registration → Authentication). Note: Entra matches the full origin including port — <code>http://localhost</code> ≠ <code>http://localhost:8080</code>.</td></tr>
+            <tr><td><code>popup_window_error: Error opening popup window</code></td><td>Should not occur in v0.8.0+ — fixed in T5a by adding an explicit "Sign in with Microsoft" button (popups now fire from a user click, which browsers always allow). If you see this error, you're on a pre-T5a build; either upgrade or click the blocked-popup icon in the address bar to allow pop-ups for <code>http://localhost:8080</code> and reload.</td></tr>
+            <tr><td>AADSTS65001 consent required</td><td>App registration permissions not granted at admin level. Re-grant admin consent.</td></tr>
+            <tr><td>JSONL is truncated mid-line</td><td>The browser was killed mid-write. Discard the partial line; <code>jq</code> will show the parse error.</td></tr>
+            <tr><td>High client CPU usage</td><td>Reduce instances per host. Rule of thumb: 1 browser per physical core. v1.0 adds a host resource monitor that flags this automatically.</td></tr>
         </table>
     </div>
 
     <div class="section">
-        <h2>Best Practices</h2>
+        <h2>Best practices</h2>
         <ul>
-            <li>🔧 Start with 5-10 second think time for initial validation</li>
-            <li>📈 Use 1 browser instance per physical CPU core</li>
-            <li>🔄 Set sessionRestart between 100-200 iterations</li>
-            <li>📊 Monitor using Premium Capacity Metrics App</li>
+            <li>Set think time to 5–10 s while validating; reduce to 0–1 s for actual load tests.</li>
+            <li>1 browser instance per physical CPU core. More than that and you're measuring browser limits, not Power BI limits.</li>
+            <li><code>sessionRestart</code> between 100–200.</li>
+            <li>Always pair the front-end results with the <strong>Fabric Capacity Metrics App</strong> for back-end CU consumption — front-end render time alone doesn't capture the smoothing/throttling story.</li>
+            <li>Don't run tests during business hours on shared/production capacities.</li>
+            <li>Even enterprise BI rarely has &gt;10 truly simultaneous queries — most realistic load tests are 5–15 concurrent with 15–60 s think time, not 50 hammering browsers.</li>
         </ul>
     </div>
 
     <div class="footer">
-        <p>Based on PowerBI-Tools-For-Capacities - https://github.com/microsoft/PowerBI-Tools-For-Capacities<br>
-        Further developed by Mihaly Kavasi</p>
+        <p>Based on PowerBI-Tools-For-Capacities — https://github.com/microsoft/PowerBI-Tools-For-Capacities<br>
+        v0.8.0 — modernized by Mihaly Kavasi</p>
     </div>
 </body>
-</html> 
+</html>

@@ -444,3 +444,7 @@ RealisticLoadTestTool/* - * - *_*/
 
 # Live test-run output. Baseline test data is preserved under _Test/baselines/.
 RealisticLoadTestTool/Test Results/*.txt
+
+# MSAL config — contains tenant-specific clientId/tenantId. The committed
+# template lives at RealisticLoadTestTool/auth-config.example.json.
+RealisticLoadTestTool/auth-config.json

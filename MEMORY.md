@@ -25,14 +25,16 @@ Or use `acquireTokenRedirect` (full-page navigate, no popup at all — needs a r
 
 ---
 
-### Entra SPA redirect URIs are matched as exact strings — port included
+### Entra SPA redirect URIs are matched as exact strings — port AND hostname AND scheme
 **Symptom:** `AADSTS50011: The redirect URI specified in the request does not match`. Looks identical to the registered value at a glance.
 
-**Why:** Entra's SPA platform compares redirect URIs as exact strings, including scheme, host, port, and path. `http://localhost` and `http://localhost:8080` are different URIs to Entra. Same for trailing slashes (`http://localhost:8080/` vs `http://localhost:8080`).
+**Why:** Entra's SPA platform compares redirect URIs as exact strings, including scheme, host, port, and path. `http://localhost` and `http://localhost:8080` are different URIs to Entra. So is `http://127.0.0.1:8080` vs `http://localhost:8080` — even though they resolve to the same loopback. Same for trailing slashes (`http://localhost:8080/` vs `http://localhost:8080`).
 
 **Fix:** In Entra → App registration → Authentication → SPA → add the *exact* origin/URL the browser is sending. If you want flexibility across ports, register each one explicitly.
 
-**Where it bit:** v0.8 first MSAL config attempt — registered `http://localhost`, served from `http://localhost:8080`. Caught early because the v0.8 page sets `redirectUri: window.location.origin` by default.
+**Where it bit (twice):**
+- v0.8 first MSAL config attempt — registered `http://localhost`, served from `http://localhost:8080`. Caught early.
+- v1.0 Stage 1 first runner attempt (2026-05-05) — runner defaulted to `http://127.0.0.1:8765`, Entra had `http://localhost:8080` from v0.8. Both wrong host AND wrong port. Fix: changed runner defaults to `localhost:8080` so existing v0.8 Entra configs Just Work; added `--host`/`--port` overrides with a banner reminding to register the exact origin.
 
 ---
 

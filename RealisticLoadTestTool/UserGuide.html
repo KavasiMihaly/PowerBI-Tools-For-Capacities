@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Realistic Load Test Tool — User Guide v0.8.0</title>
+    <title>Realistic Load Test Tool — User Guide v1.0.0-stage1</title>
     <style>
         body { font-family: 'Segoe UI', Arial, sans-serif; line-height: 1.6; margin: 2rem; background: #f8f9fa; }
         .header { background: #2c3e50; color: white; padding: 2rem; border-radius: 8px; margin-bottom: 2rem; }
@@ -23,7 +23,7 @@
 <body>
     <div class="header">
         <h1>Realistic Load Test Tool</h1>
-        <p>Version 0.8.0 | Modernized fork of <a style="color: #b3d9ff" href="https://github.com/microsoft/PowerBI-Tools-For-Capacities">microsoft/PowerBI-Tools-For-Capacities</a> by Mihaly Kavasi</p>
+        <p>Version 1.0.0-stage1 | Modernized fork of <a style="color: #b3d9ff" href="https://github.com/microsoft/PowerBI-Tools-For-Capacities">microsoft/PowerBI-Tools-For-Capacities</a> by Mihaly Kavasi</p>
     </div>
 
     <div class="section">
@@ -33,24 +33,30 @@
     </div>
 
     <div class="section">
-        <h2>What's new in v0.8.0</h2>
+        <h2>What's new in v1.0 Stage 1</h2>
         <ul>
-            <li><strong>Vendored powerbi-client 2.23.1</strong> — replaces dead <code>cdn.rawgit.com</code>. Tool now bootstraps on a clean machine.</li>
-            <li><strong>MSAL.js silent token refresh</strong> — once configured, no more 60-min manual token refreshes.</li>
-            <li><strong>JSONL log output</strong> — structured data instead of HTML-with-<code>&lt;br&gt;</code> separators.</li>
-            <li><strong>Off-by-one fix</strong> — runs stop exactly at <code>numberOfViews</code>, not one past.</li>
+            <li><strong>Playwright runner replaces CefSharp.</strong> A small Node script (<code>runner/run.js</code>) launches N Chromium contexts at <code>http://localhost</code>, captures <code>console.log('METRIC ...')</code> from each, and writes JSONL to disk. Fixes multi-window MSAL.</li>
+            <li><strong>Run with <code>node run.js --concurrency N</code></strong> instead of <code>Run_Load_Test_Only.ps1</code>.</li>
+            <li><strong>Deleted:</strong> <code>ChromeWriteBack/</code>, <code>Run_Load_Test_Only.ps1</code>, <code>Update_Token_Only.ps1</code>, <code>PBIToken.json</code> template, and the <code>CefSharp.PostMessage</code> writeback path in the HTML. Single auth path (MSAL), single writeback channel (console).</li>
+        </ul>
+        <h3>Carried forward from v0.8.0</h3>
+        <ul>
+            <li><strong>Vendored powerbi-client 2.23.1</strong> — replaces dead <code>cdn.rawgit.com</code>.</li>
+            <li><strong>MSAL.js silent token refresh.</strong></li>
+            <li><strong>JSONL log output.</strong></li>
+            <li><strong>Off-by-one fix</strong> — runs stop exactly at <code>numberOfViews</code>.</li>
             <li><strong>jQuery removed.</strong></li>
-            <li><strong>Backwards-compatible</strong> — legacy <code>PBIToken.json</code> + <code>Update_Token_Only.ps1</code> path still works.</li>
+            <li><strong>In-page Setup picker</strong> for ad-hoc runs.</li>
         </ul>
     </div>
 
     <div class="section">
-        <h2>Two ways to set up a test</h2>
-        <p>v0.8 supports two flows depending on whether you want a quick ad-hoc test or a repeatable scenario:</p>
+        <h2>Three ways to set up a test</h2>
         <table>
             <tr><th>Use case</th><th>Tool</th><th>Output</th></tr>
             <tr><td>Quick check — pick a workspace and report, run with default cycling</td><td><strong>In-page Setup picker</strong> (this HTML) — leave <code>PBIReport.json</code> empty</td><td>In-memory only; rerun by reloading the page</td></tr>
-            <tr><td>Repeatable scenario with filters, bookmarks, page navigation, multi-window concurrency</td><td><code>Setup_Load_Test.ps1</code></td><td>Per-test subfolder with populated <code>PBIReport.json</code> and a copy of the HTML</td></tr>
+            <tr><td>Repeatable scenario, single instance</td><td>Edit <code>PBIReport.json</code> directly (or use <code>Setup_Load_Test.ps1</code> to generate a populated one)</td><td>Persisted on disk</td></tr>
+            <tr><td>Multi-instance concurrency (N parallel browsers, same scenario)</td><td><strong><code>runner/run.js</code></strong> — Playwright runner (Stage 1)</td><td>One JSONL per instance under <code>Test Results/&lt;run&gt;/</code></td></tr>
         </table>
         <div class="note">
             The in-page picker requires the <code>Workspace.Read.All</code> delegated scope on your Entra app registration. If your app reg only has <code>Report.Read.All</code>, the picker will show a permission error pointing to <code>_Documentation/MSAL-app-registration.md</code>.
@@ -59,52 +65,54 @@
 
     <div class="section" id="installation">
         <h2>Prerequisites</h2>
+        <p>For the in-page picker / single-window manual use:</p>
+        <ul><li>A modern browser (Chrome / Edge / Firefox).</li></ul>
+        <p>For multi-instance via the Playwright runner (Stage 1):</p>
+        <pre><code># One-time machine setup
+cd RealisticLoadTestTool/runner
+npm install
+npx playwright install chromium    # ~150MB browser binary</code></pre>
+        <p>For the legacy <code>Setup_Load_Test.ps1</code> scenario generator (still works in Stage 1):</p>
         <pre><code># Run in elevated PowerShell (one-time)
 Set-ExecutionPolicy Unrestricted
 Install-Module -Name MicrosoftPowerBIMgmt</code></pre>
-        <p>Plus a modern browser (Chrome / Edge / Firefox).</p>
     </div>
 
     <div class="section" id="msal">
-        <h2>One-time: configure MSAL (recommended)</h2>
-        <p>This is the killer v0.8 feature: configure once, then no manual token refreshes ever.</p>
+        <h2>One-time: configure MSAL (mandatory)</h2>
+        <p>MSAL is the only auth path. Configure once, then no manual token refreshes ever.</p>
         <ol>
             <li>Tenant admin: register a Single-Page Application in Entra ID (full instructions in <code>_Documentation/MSAL-app-registration.md</code>). Note the <strong>Application (client) ID</strong> and <strong>Directory (tenant) ID</strong>.</li>
             <li>In <code>RealisticLoadTestTool/</code>, copy <code>auth-config.example.json</code> to <code>auth-config.json</code>.</li>
             <li>Paste your client ID and tenant ID into <code>auth-config.json</code>. (This file is gitignored.)</li>
-            <li>Open <code>RealisticLoadTest.html</code> via <code>http://localhost</code> — NOT <code>file://</code>:
-                <pre><code># From RealisticLoadTestTool/
-python -m http.server 8080
-# Browser: http://localhost:8080/&lt;your-test-folder&gt;/RealisticLoadTest.html</code></pre>
+            <li>Either run the Playwright runner (recommended — see Workflow below) or serve HTML manually:
+                <pre><code>python -m http.server 8080
+# Browser: http://localhost:8080/RealisticLoadTest.html</code></pre>
             </li>
             <li>Sign in once. The page silently refreshes the token forever after.</li>
         </ol>
-        <div class="warn">
-            <strong>CefSharp / ChromeWriteBack note:</strong> The existing <code>Run_Load_Test_Only.ps1</code> launcher uses CefSharp, which loads HTML via <code>file://</code>. Entra rejects <code>file://</code> redirect URIs, so windows launched that way fall back to <code>PBIToken.json</code> auth. The MSAL improvement applies to direct-browser-via-localhost usage. v1.0 will replace CefSharp with a Playwright-orchestrated Chromium that supports <code>http://localhost</code>.
+        <div class="note">
+            <strong>Multi-window MSAL works in Stage 1.</strong> The runner serves HTML over <code>http://localhost</code> and uses one persistent Chromium profile, so all windows share the same MSAL cache — sign in once in the first window and every subsequent window acquires silently.
         </div>
     </div>
 
     <div class="section" id="quickstart">
         <h2>Workflow</h2>
         <ol>
-            <li>Initialize per-report test folders:
-                <pre><code>.\Setup_Load_Test.ps1</code></pre>
-                Prompts for: number of reports, views per report, think time, project name. Generates a subfolder per report (named <code>&lt;Workspace&gt; - &lt;Report&gt; - &lt;timestamp&gt;</code>).
+            <li>(Optional) Configure a scenario via <code>Setup_Load_Test.ps1</code> — prompts for workspace, report, views, think time, project name and writes a populated <code>PBIReport.json</code> into a per-test subfolder. (Or skip this and edit the root <code>PBIReport.json</code> directly. Stage 1 only invokes the root config — subfolders are scenario archives until Stage 4.)</li>
+            <li>Launch the load test:
+                <pre><code>cd RealisticLoadTestTool/runner
+node run.js --concurrency 4</code></pre>
+                Opens 4 Chromium windows, all serving the configured scenario from <code>http://127.0.0.1:8765/RealisticLoadTest.html</code>.
             </li>
-            <li>(Legacy path only) Refresh the token:
-                <pre><code>.\Update_Token_Only.ps1</code></pre>
-                Skip this if you've configured MSAL (see above).
-            </li>
-            <li>Launch the load test (CefSharp multi-window):
-                <pre><code>.\Run_Load_Test_Only.ps1 4</code></pre>
-                Launches 4 browser instances per subfolder.
-            </li>
-            <li>Or, for MSAL-enabled single-window testing:
-                <pre><code># From the test subfolder, with localhost server running
-# Open http://localhost:8080/RealisticLoadTest.html in browser</code></pre>
-            </li>
+            <li>First run only: click <strong>"Sign in with Microsoft"</strong> in the first window. The MSAL token caches in the run's browser profile and all subsequent windows acquire silently.</li>
             <li>Watch the metrics panel and the JSONL flow into <code>Test Results/&lt;run&gt;/&lt;instanceId&gt;.jsonl</code>.</li>
+            <li>The runner exits cleanly when every instance has emitted <code>view_limit_reached</code>. Or Ctrl+C to stop early — partial JSONL is still valid.</li>
         </ol>
+        <p>Single-window manual use (no Playwright dependency):</p>
+        <pre><code>cd RealisticLoadTestTool
+python -m http.server 8080
+# Browser: http://localhost:8080/RealisticLoadTest.html</code></pre>
     </div>
 
     <div class="section" id="output">
@@ -123,18 +131,19 @@ python -m http.server 8080
   "filters": [],
   "slicers": [...],
   "view": { "current": 3, "target": 15 },
-  "durationMs": { "current": 6101, "average": 5051 },
+  "durationMs": 6101,
+  "isFirstRender": false,
   "thinkTimeSec": 1
 }</code></pre>
         <p>Quick parsing examples:</p>
-        <pre><code># All durations
-jq '.durationMs.current' *.jsonl
+        <pre><code># Steady-state durations only (excluding cold-start renders)
+jq 'select(.event=="rendered" and .isFirstRender==false) | .durationMs' *.jsonl
 
 # Errors
 jq 'select(.event=="error")' *.jsonl
 
-# p95 by bookmark
-jq -s 'group_by(.bookmark) | map({ bookmark: .[0].bookmark, p95: (sort_by(.durationMs.current) | .[length*0.95 | floor].durationMs.current) })' *.jsonl</code></pre>
+# p95 by bookmark (steady-state)
+jq -s '[.[] | select(.event=="rendered" and .isFirstRender==false)] | group_by(.bookmark) | map({ bookmark: .[0].bookmark, p95: (sort_by(.durationMs) | .[length*0.95 | floor].durationMs) })' *.jsonl</code></pre>
     </div>
 
     <div class="section" id="configuration">
@@ -183,7 +192,10 @@ jq -s 'group_by(.bookmark) | map({ bookmark: .[0].bookmark, p95: (sort_by(.durat
         <h2>Troubleshooting</h2>
         <table>
             <tr><th>Issue</th><th>Solution</th></tr>
-            <tr><td>Page is blank, no metrics</td><td>Open DevTools → Console. Look for <code>[v0.8.0] MSAL not configured</code> or token errors. If MSAL: verify <code>auth-config.json</code> values + redirect URI. If legacy: run <code>Update_Token_Only.ps1</code>.</td></tr>
+            <tr><td>Page is blank, no metrics</td><td>Open DevTools → Console. Look for <code>MSAL initialization failed</code> or token errors. Verify <code>auth-config.json</code> values + that the page's origin is registered in the Entra SPA app's redirect URIs.</td></tr>
+            <tr><td>Runner: <code>Playwright is not installed</code></td><td>Run <code>npm install</code> in <code>RealisticLoadTestTool/runner</code>.</td></tr>
+            <tr><td>Runner: <code>Executable doesn't exist</code></td><td>Run <code>npx playwright install chromium</code> from <code>RealisticLoadTestTool/runner</code>.</td></tr>
+            <tr><td>Runner: all instances emit <code>auth_failure</code> in headless mode</td><td>The shared MSAL cache is empty or expired. Run once headed first to populate it.</td></tr>
             <tr><td>AADSTS50011 redirect URI mismatch</td><td>The URL the page is served from isn't in the SPA app's redirect URI list. Add it (Entra → App registration → Authentication). Note: Entra matches the full origin including port — <code>http://localhost</code> ≠ <code>http://localhost:8080</code>.</td></tr>
             <tr><td><code>popup_window_error: Error opening popup window</code></td><td>Should not occur in v0.8.0+ — fixed in T5a by adding an explicit "Sign in with Microsoft" button (popups now fire from a user click, which browsers always allow). If you see this error, you're on a pre-T5a build; either upgrade or click the blocked-popup icon in the address bar to allow pop-ups for <code>http://localhost:8080</code> and reload.</td></tr>
             <tr><td>AADSTS65001 consent required</td><td>App registration permissions not granted at admin level. Re-grant admin consent.</td></tr>
@@ -206,7 +218,7 @@ jq -s 'group_by(.bookmark) | map({ bookmark: .[0].bookmark, p95: (sort_by(.durat
 
     <div class="footer">
         <p>Based on PowerBI-Tools-For-Capacities — https://github.com/microsoft/PowerBI-Tools-For-Capacities<br>
-        v0.8.0 — modernized by Mihaly Kavasi</p>
+        v1.0.0-stage1 — modernized by Mihaly Kavasi</p>
     </div>
 </body>
 </html>

@@ -1,0 +1,20 @@
+{
+  "name": "realistic-load-test-runner",
+  "version": "1.0.0-stage1",
+  "private": true,
+  "description": "Node + Playwright orchestrator that replaces Run_Load_Test_Only.ps1 + ChromeWriteBack/CefSharp. Serves RealisticLoadTest.html over http://localhost so MSAL works, launches N Chromium contexts, captures METRIC console lines and writes JSONL.",
+  "main": "run.js",
+  "bin": {
+    "rlt-run": "./run.js"
+  },
+  "scripts": {
+    "start": "node run.js",
+    "headless": "node run.js --headless"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "playwright": "^1.49.0"
+  }
+}

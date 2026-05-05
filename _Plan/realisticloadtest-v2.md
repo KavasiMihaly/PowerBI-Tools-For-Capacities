@@ -365,7 +365,96 @@ Backlog row: B6.
 
 ---
 
-## Phase v1.0 — UX layer (~3–4 weeks)
+## Phase v1.0 — REVISED 2026-05-05: vertical slices, Playwright-first
+
+**Why this revision:** The original v1.0 ordering (T9 → T11 → T10 → T8 → T12) treated CefSharp as a v2.0 problem. After v0.8 shipped, the dual auth path (MSAL for single-window + the now-removed PBIToken.json fallback for CefSharp multi-window) made CefSharp the single largest source of complexity and the *reason* multi-window MSAL is broken. Pulling Playwright (T13) forward as Stage 1 deletes CefSharp on day 1, fixes multi-window auth, and unlocks T13a immediately. Each stage below is independently shippable and end-to-end testable.
+
+### Stage 1 — Playwright runner kills CefSharp (T13 + T13a moved up from v2.0)
+
+**Goal:** Identical user experience to v0.8 (existing `PBIReport.json` / `Filters.json` configs) but launched by Node + Playwright instead of `Run_Load_Test_Only.ps1` + CefSharp.
+
+**Build:**
+- `runner/run.js` — Node + Playwright. Launches N Chromium contexts at `http://localhost:PORT/RealisticLoadTest.html`, captures `page.on('console')` for `'METRIC '`-prefixed lines (the prefix is already in v0.8 — T4 laid this groundwork), writes `Test Results/<run>/<instanceId>.jsonl`.
+- Tiny static file server inside the runner so HTML is served via `http://localhost` (MSAL-compatible — solves the multi-window auth problem from T5b).
+- `runner/package.json` (Playwright + nothing else).
+
+**Deletes (T13a moved up from v2.0):**
+- `RealisticLoadTestTool/PBIToken.json` template
+- `RealisticLoadTestTool/Update_Token_Only.ps1`
+- `RealisticLoadTestTool/ChromeWriteBack/` (entire directory)
+- `RealisticLoadTestTool/Run_Load_Test_Only.ps1` (replaced by `node runner/run.js`)
+- PBIToken-writing logic in `Setup_Load_Test.ps1` (script kept, just stripped of legacy token plumbing)
+- `CefSharp.PostMessage` writeback path in `RealisticLoadTest.html` (only `console.log('METRIC ' + ...)` remains)
+
+**Vertical test:** Run multi-window (concurrency=2) on the demo `.pbix` using existing `PBIReport.json`. JSONL output matches single-window v0.8 schema. MSAL silent refresh works in all windows.
+
+**Outcome:** CefSharp dead. Auth path is single (MSAL only). T7c (per-test subfolder relative paths) becomes obsolete because HTML is served from a single root.
+
+### Stage 2 — Coordinator HTTP API + live dashboard (T11 / B4b)
+
+**Goal:** Live aggregation across all instances; multi-VM architecture provable.
+
+**Build:**
+- Extend Stage 1's static server into `coordinator/server.js`. Endpoints: `POST /metric`, `GET /dashboard`, `GET /status`. Localhost-only by default; `--bind 0.0.0.0 --dev` flag for B4b architecture-readiness check (logs source IP).
+- `coordinator/dashboard.html` — vanilla JS, polls `/status` every 2s, shows total throughput, p50/p95 per report, error events, instance count.
+- Dual-write: runner writes JSONL to file *and* POSTs each parsed metric to `/metric` (coordinator crash doesn't lose data; coordinator off entirely is fine — file path still works).
+
+**Vertical test:** TEST-V10-07, V10-08, V10-09, V10-12.
+
+### Stage 3 — Resource monitor sidecar (T10 / B3)
+
+**Goal:** Catch host CPU/RAM saturation that silently invalidates metrics.
+
+**Build:**
+- `tools/resource-monitor/monitor.py` — psutil, 1Hz sampling, writes `host-metrics.jsonl`, POSTs saturation status to coordinator's new `/saturation` endpoint.
+- `RealisticLoadTest.html` polls coordinator `/status` for current saturation flag, stamps `host_saturated: true` onto any metric record emitted during a saturation window.
+- Dashboard shows red banner during saturation.
+
+**Vertical test:** TEST-V10-04, V10-05, V10-06.
+
+### Stage 4 — YAML config + migration (T9)
+
+**Goal:** Replace per-folder JSON files with one `loadtest.yaml`.
+
+**Build:**
+- `loadtest.example.yaml`, `_Documentation/loadtest-yaml-schema.md`.
+- Runner reads YAML, opens one Chromium context per concurrency slot per scenario.
+- `coordinator/migrate.js` — `node migrate.js <v0.8-folder>` produces `loadtest.yaml`.
+
+**Vertical test:** TEST-V10-02, V10-03.
+
+### Stage 5 — Setup.html web UI (T8 / B2)
+
+**Goal:** Browser-only setup wizard generates `loadtest.yaml`.
+
+**Build:**
+- `RealisticLoadTestTool/Setup.html` — extends T7b's in-page picker with page/bookmark/filter UI. Reuses MSAL config.
+- Coordinator gets `POST /config/save` endpoint that writes `loadtest.yaml`.
+- Wizard flow: workspace → report → page → bookmark → filter builder → concurrency / views / think time → "Generate" → "Run".
+- Delete `Setup_Load_Test.ps1` after parity confirmed.
+
+**Vertical test:** TEST-V10-01.
+
+### Stage 6 — Easy install (T12 / B4a)
+
+**Goal:** One-command install on fresh Windows.
+
+**Build:** `install.ps1`, winget manifest, GitHub Releases zip bundling Node, Playwright browsers, vendored libs, monitor.py.
+
+**Vertical test:** TEST-V10-10, V10-11.
+
+### Backlog impact
+
+| Backlog row | Was | Now |
+|---|---|---|
+| T13 — Playwright runner | v2.0 | v1.0 Stage 1 |
+| T13a — Delete legacy auth artifacts | v1.0 (after T13) | v1.0 Stage 1 (alongside T13) |
+| T7c — Per-test-subfolder lib paths | v0.8.1 Backlog | **Obsolete** — Stage 1 serves HTML from a single root |
+| T7d — Paginate `/groups` | v0.8.1 Backlog | Unchanged (still v0.8.1) |
+
+---
+
+## Phase v1.0 — ORIGINAL UX layer ordering (superseded 2026-05-05 — kept for context)
 
 Goal: setup happens in the browser; metrics aggregate live across instances; host saturation is visible.
 
@@ -444,8 +533,8 @@ Per user decision: build v1.0 architecture so v2.0 is straightforward, but **don
 
 Sketch of v2.0 work for future planning round:
 
-- **T13. Replace ChromeWriteBack with Playwright.** Node script that orchestrates N browser pages, captures `page.on('console')` for `'METRIC '`-prefixed lines (T4 already laid this groundwork), supports headless mode for VMs.
-- **T13a. Delete legacy auth artifacts at v1.0 cutover.** When T13 ships, delete: `RealisticLoadTestTool/PBIToken.json` (template), `RealisticLoadTestTool/Update_Token_Only.ps1`, `RealisticLoadTestTool/ChromeWriteBack/` directory, and the PBIToken-writing logic inside `Setup_Load_Test.ps1`. These were marked "v0.8 DEAD CODE" in T5b and held purely for the existing CefSharp runner — once Playwright replaces it, they have no consumer.
+- ~~**T13. Replace ChromeWriteBack with Playwright.**~~ **Moved to v1.0 Stage 1 on 2026-05-05.** See revised v1.0 section above.
+- ~~**T13a. Delete legacy auth artifacts at v1.0 cutover.**~~ **Moved to v1.0 Stage 1 on 2026-05-05** alongside T13.
 - **T14. Service principal auth.** Cert-based; read SP credentials from env vars / Azure Key Vault on the VM.
 - **T15. Bicep/Terraform templates.** N VMs from a template, cloud-init installs Playwright + Node + the tool, registers with the coordinator endpoint over HTTPS.
 - **T16. Worker mode for the coordinator.** Workers register with `POST /workers/register`, receive scenario assignment, stream JSONL back. Coordinator handles fan-out and fan-in.

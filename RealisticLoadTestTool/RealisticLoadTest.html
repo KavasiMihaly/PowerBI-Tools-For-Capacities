@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="utf-8" />
-    <title>Realistic Load Test v0.8.0</title>
+    <title>Realistic Load Test v1.0.0-stage1</title>
 
     <style>
         body {
@@ -138,7 +138,7 @@
         // ============================================================
         // Realistic Load Test
         // ============================================================
-        const TOOL_VERSION = '0.8.0';
+        const TOOL_VERSION = '1.0.0-stage1';
         const SCHEMA_VERSION = 1;
 
         // ---------- Globals ----------
@@ -146,7 +146,7 @@
         let runTime = startTime;
         const instanceID = Math.floor(Math.random() * 10_000_000) + 1;
 
-        // Shared run ID (per launch of Run_Load_Test_Only.ps1 or sessionStorage-scoped browser session)
+        // Shared run ID (per launch of `node runner/run.js` or sessionStorage-scoped manual browser session)
         let runId = sessionStorage.getItem('runId');
         if (!runId) {
             runId = startTime.toISOString().replace(/[:.]/g, '-').slice(0, 19) +
@@ -272,9 +272,9 @@
         let isFirstRender = true;
 
         // ============================================================
-        // Auth: MSAL only (legacy PBIToken.json path removed in v0.8 — see backlog T5b).
-        // CefSharp/Run_Load_Test_Only.ps1 multi-window concurrency does not work with
-        // MSAL (file:// redirect URI rejected by Entra) and must wait for v1.0 Playwright.
+        // Auth: MSAL only (legacy PBIToken.json path removed in v0.8 — backlog T5b;
+        // CefSharp/ChromeWriteBack runner removed in v1.0 Stage 1 — backlog T13/T13a.
+        // Multi-window concurrency now works because runner/run.js serves over http://localhost.
         // ============================================================
         let msalApp = null;
         let authConfig = null;
@@ -370,10 +370,10 @@
                 thinkTimeSec: thinkTimeSeconds
             }, extras || {});
             const json = JSON.stringify(metric);
-            // Console output — captured by Playwright in v2.0; also visible in DevTools.
+            // Single channel: console.log with the 'METRIC ' prefix. The runner (runner/run.js)
+            // captures these via Playwright's page.on('console') and writes them to <instanceId>.jsonl.
+            // Also visible in DevTools when running manually in a normal browser tab.
             console.log('METRIC ' + json);
-            // CefSharp.PostMessage backwards compat: keeps existing ChromeWriteBack writeback working.
-            try { if (typeof CefSharp !== 'undefined') CefSharp.PostMessage(json); } catch (e) { /* not in CefSharp */ }
             updateMetricsTable(metric);
             return metric;
         }
@@ -754,7 +754,7 @@
 
     <footer class="footer">
         Based on PowerBI-Tools-For-Capacities — https://github.com/microsoft/PowerBI-Tools-For-Capacities<br>
-        Further developed by Mihaly Kavasi · Version 0.8.0
+        Further developed by Mihaly Kavasi · Version 1.0.0-stage1
     </footer>
 </body>
 </html>

@@ -44,3 +44,26 @@ Or use `acquireTokenRedirect` (full-page navigate, no popup at all — needs a r
 **Fix:** Added `RealisticLoadTestTool/auth-config.json` to `.gitignore` (line 450). Committed example template stays at `auth-config.example.json`.
 
 **Lesson:** When a doc claims a file is gitignored, verify it with `git check-ignore -v <path>`. Don't trust the prose alone.
+
+---
+
+### Power BI SDK iframe collapses to ~150px when parent uses `min-height` instead of `height`
+**Symptom:** Embedded report renders only the top sliver (~200px) — page tabs and bookmarks panel visible, but no visuals/canvas below them. Metrics still flow, `rendered` events fire normally. Looks like the iframe is "really narrow" even though it's actually full-width.
+
+**Why:** The Power BI JS SDK injects an iframe with `style="width:100%; height:100%; border:0"` into the embed container. In CSS, `height: 100%` on a child only resolves when the parent has a **definite** height — `min-height` alone leaves the parent's computed height as `auto`, so the percentage falls back to the HTML iframe default (~150px).
+
+**Fix:** Give the embed container a definite height (viewport-relative scales best):
+```css
+#embedDiv {
+    height: 80vh;
+    min-height: 600px;          /* floor for short windows */
+    box-sizing: border-box;     /* padding stays inside the height */
+}
+#embedDiv iframe { width: 100%; height: 100%; border: 0; }   /* belt-and-braces in case SDK changes its injected style */
+```
+
+`LayoutType.Master` in the SDK embed config is fine — the issue is purely the CSS container, not the SDK settings.
+
+**Where it bit:** v1.0 Stage 3 testing, 2026-05-21. The Stage 2.5 brand refactor introduced `min-height: 800px` on `#embedDiv` (replacing the v0.7.1 inline styles). Tracked + fixed as backlog B9.
+
+**Lesson:** Any container that holds a Power BI embed (or any iframe with `height: 100%`) needs a definite height — `min-height` is not enough. When designing future surfaces (Stage 5 Setup wizard, Stage 6 install/welcome screens), set explicit `height` on every embed parent.

@@ -401,6 +401,53 @@ Backlog row: B6.
 
 **Vertical test:** TEST-V10-07, V10-08, V10-09, V10-12.
 
+### Stage 2.5 — Apply OneDayBI brand to all views (B7)
+
+**Why now:** The dashboard from Stage 2 is the most-looked-at surface in the tool. Stage 5 (`Setup.html`) is the next new HTML to ship. Re-skinning the existing three HTML views (`RealisticLoadTest.html`, `coordinator/dashboard.html`, `UserGuide.html`) once now means Stage 5 inherits the brand from day 1, and we never go back to retro-skin three files.
+
+**Brand source:** `C:\Users\kavas\Documents\GitHub\OneDayBI Marketing\Design\OneDayBI_Brand_Style_Reference.md`. Key elements:
+- **Palette:** Navy Dark `#0F172A`, Navy `#1E293B`, Slate `#334155`, Amber `#F59E0B`, Off-White `#F8FAFC`, Light Grey `#E2E8F0`. Replaces the current ad-hoc `#2c3e50` / `#3498db` / `#ecf0f1` palette.
+- **Typography:** Arial for headings, Calibri for body (already partially used as `'Segoe UI'` fallbacks — keep Segoe UI as Windows-friendly fallback in `font-family` chains).
+- **Visual motifs:** 6px amber top bar on every page; left amber accent bar on cards; subtle card shadows; dark-navy footer with "onedaybi.com".
+- **Logo:** `onedaybilogo_dark_transparent.svg` (white text — for navy backgrounds) and `onedaybilogo_transparent.svg` (navy text — for light backgrounds).
+
+**Build:**
+- New file `RealisticLoadTestTool/lib/onedaybi.css` — single source of truth for brand tokens. Defines CSS custom properties (`--color-navy`, `--color-amber`, `--font-heading`, etc.) plus reusable component classes (`.card`, `.btn-primary`, `.amber-top-bar`, `.brand-footer`).
+- Copy two logo SVGs into `RealisticLoadTestTool/lib/`: `onedaybi-logo-dark.svg` (white text version, for the dark dashboard header) and `onedaybi-logo-light.svg` (navy text version, for light page headers).
+- Refactor `RealisticLoadTest.html`: replace inline `<style>` palette with `<link rel="stylesheet" href="lib/onedaybi.css">` + minimal page-specific overrides. Apply amber top bar, amber accent on cards, brand footer.
+- Refactor `coordinator/dashboard.html`: same. Header gets the dark logo + amber top bar. Cards get the brand color treatment.
+- Refactor `UserGuide.html`: same. Document sections get the brand H1/H2 styles.
+- Update version footer to `1.0.0-stage2.5`.
+
+**Out of scope (explicit non-goals):**
+- Brand voice / copy edits — separate concern; existing technical copy stays.
+- Accessibility audit (contrast ratios, ARIA) — folded into a future enhancement if needed.
+- Marketing-site additions — this is product UI only.
+- Setup picker / wizard wireframe redesign — Stage 5 will design the wizard from scratch using the brand CSS this stage produces.
+
+**Vertical test:** Visual smoke check —
+1. Coordinator dashboard at `/dashboard` shows amber top bar, dark navy header with logo, brand-coloured cards, slate text, amber footer.
+2. `RealisticLoadTest.html` shows the same brand treatment.
+3. `UserGuide.html` shows the same.
+4. Single CSS file (`lib/onedaybi.css`) referenced by all three.
+5. No regressions: dashboard still polls /status, embed still renders, in-page Setup picker still works.
+
+**Files added:**
+- `RealisticLoadTestTool/lib/onedaybi.css`
+- `RealisticLoadTestTool/lib/onedaybi-logo-dark.svg`
+- `RealisticLoadTestTool/lib/onedaybi-logo-light.svg`
+
+**Files modified:**
+- `RealisticLoadTestTool/RealisticLoadTest.html` (style tag → linked CSS + class additions)
+- `RealisticLoadTestTool/coordinator/dashboard.html` (style tag → linked CSS + class additions)
+- `RealisticLoadTestTool/UserGuide.html` (style tag → linked CSS + class additions)
+
+**Backlog row:** B7.
+
+**Tooling note:** the repo's `brand-guidelines` skill (multi-brand: onedaybi, selfservicebi) can be invoked to do the actual CSS extraction and apply-to-views work consistently. Spec says `Specify which brand to use (e.g., "onedaybi", ...)` — invoke as `Skill brand-guidelines onedaybi` when implementing.
+
+---
+
 ### Stage 3 — Resource monitor sidecar (T10 / B3)
 
 **Goal:** Catch host CPU/RAM saturation that silently invalidates metrics.
@@ -423,17 +470,34 @@ Backlog row: B6.
 
 **Vertical test:** TEST-V10-02, V10-03.
 
-### Stage 5 — Setup.html web UI (T8 / B2)
+### Stage 5 — Unified control plane + Setup.html (T8 / B2 + B8)
 
-**Goal:** Browser-only setup wizard generates `loadtest.yaml`.
+**Decision 2026-05-05 (user-confirmed Option B):** Defer the dashboard-as-control-plane work — single-process unification, dashboard-level sign-in, launch-N-runners-from-dashboard — into this stage rather than inserting a new mid-plan stage. Stages 3 and 4 ship with the two-terminal flow intact; Stage 5 collapses everything into one comprehensive UX.
 
-**Build:**
-- `RealisticLoadTestTool/Setup.html` — extends T7b's in-page picker with page/bookmark/filter UI. Reuses MSAL config.
-- Coordinator gets `POST /config/save` endpoint that writes `loadtest.yaml`.
-- Wizard flow: workspace → report → page → bookmark → filter builder → concurrency / views / think time → "Generate" → "Run".
+**Goal:** One-command boot. The dashboard becomes the control plane: sign in, configure, launch, monitor, stop — all from one browser tab. The CLI runner stays available for power users / scripting but the dashboard is the default path.
+
+**Build (control plane — new in Stage 5 per the deferral):**
+- **Coordinator spawns the runner.** New endpoints: `POST /run/start` (body: scenario + concurrency / views / think time), `POST /run/stop`, `GET /run/status`. Implementation: `child_process.spawn('node', ['runner/run.js', '--coordinator', selfUrl, ...])`. Multiple concurrent runs allowed; each gets its own runId tracked in coordinator state.
+- **Dashboard sign-in.** Top-right "Sign in with Microsoft" button on `/dashboard`. Uses the existing MSAL flow (vendored `msal-browser-3.27.0.min.js`) directly in the dashboard tab. Token cache lives in `localStorage` of the dashboard origin.
+- **Token sharing with spawned runners.** Coordinator keeps a single Playwright profile dir at `RealisticLoadTestTool/coordinator/.shared-profile/`. Dashboard pre-warms the profile by calling a coordinator endpoint that uses Playwright server-side to sign in once (or by replaying the dashboard's MSAL token blob into the profile via Playwright's `addInitScript` + `localStorage` seed). The runner switches from per-run profile to this shared profile via a new `--profile-dir` flag. All spawned tabs acquire silently from the shared cache.
+- **Launch panel on dashboard.** Form: scenario picker (Stage 5 wizard output), concurrency, views, think time, project name. "Start run" button POSTs to `/run/start`. Live runner stdout streams to a new dashboard panel via Server-Sent Events from `GET /run/<runId>/log/stream`.
+- **Stop button** per active run on the dashboard. POSTs to `/run/stop?runId=...`.
+- **CLI compatibility preserved.** `node runner/run.js --concurrency 5 --coordinator http://localhost:8080` keeps working unchanged.
+
+**Build (scenario editor — original Stage 5 scope):**
+- `RealisticLoadTestTool/Setup.html` (or in-dashboard panel) — extends the in-page picker with page / bookmark / filter UI. Reuses MSAL token from the dashboard sign-in.
+- Coordinator `POST /config/save` writes `loadtest.yaml`.
+- Wizard flow: workspace → report → page → bookmark → filter builder → save scenario → return to dashboard.
 - Delete `Setup_Load_Test.ps1` after parity confirmed.
 
-**Vertical test:** TEST-V10-01.
+**Trade-offs accepted by deferring:**
+- Stages 3 (resource monitor) and 4 (YAML config) ship + test under the two-terminal model. Their work is unaffected — resource monitor still POSTs to `/saturation`, YAML still drives the runner via CLI.
+- The dashboard-spawning code (~200 LOC across coordinator + dashboard) lands all at once in Stage 5 instead of incrementally.
+
+**New backlog row:**
+- **B8** — Unified control plane (coordinator spawns runner, dashboard-level sign-in + launcher). Folded into Stage 5 per Option B.
+
+**Vertical test:** TEST-V10-01 (extended) — start with `node server.js`, sign in via dashboard, configure a 2-report scenario via wizard, launch with concurrency=2, watch metrics flow to dashboard, click Stop, verify clean shutdown. Zero PowerShell. Zero second-terminal command.
 
 ### Stage 6 — Easy install (T12 / B4a)
 
@@ -450,6 +514,8 @@ Backlog row: B6.
 | T13 — Playwright runner | v2.0 | v1.0 Stage 1 |
 | T13a — Delete legacy auth artifacts | v1.0 (after T13) | v1.0 Stage 1 (alongside T13) |
 | T7c — Per-test-subfolder lib paths | v0.8.1 Backlog | **Obsolete** — Stage 1 serves HTML from a single root |
+| **B7 — OneDayBI brand application** | (new, added 2026-05-05) | v1.0 Stage 2.5 — slot between coordinator ship and resource monitor so Stage 5 inherits the brand |
+| **B8 — Unified control plane** (single-process boot, dashboard-level sign-in, launch-from-dashboard) | (new, added 2026-05-05) | v1.0 Stage 5 — folded in per user-confirmed Option B (defer rather than insert a new mid-plan stage) |
 | T7d — Paginate `/groups` | v0.8.1 Backlog | Unchanged (still v0.8.1) |
 
 ---

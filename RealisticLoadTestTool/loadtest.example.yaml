@@ -1,0 +1,95 @@
+# loadtest.example.yaml — RealisticLoadTest v1.0 Stage 4 scenario manifest.
+#
+# Single source of truth for a load test run. Replaces the v0.8 per-folder
+# PBIReport.json / Filters.json / Bookmarks.json / Page.json files. See
+# _Documentation/loadtest-yaml-schema.md for full field reference and validation rules.
+#
+# Quick start: copy this file to `loadtest.yaml`, fill in your workspace + report IDs,
+# and run `node runner/run.js --config ../loadtest.yaml`.
+
+# ---------- Required top-level fields ----------
+
+project: "capacity-stress-q2"
+# Free-form label stamped on every metric record as `projectName`. Used to group
+# runs in downstream analysis. Required.
+
+workspace: "7bbb6481-0000-0000-0000-000000000000"
+# Power BI workspace (group) ID — all reports below must live in this workspace.
+# Cross-workspace runs need separate YAML files. Required, must be a GUID.
+
+# ---------- Run-level defaults (apply to every scenario) ----------
+
+concurrency: 5
+# Browser tabs per scenario. Total tabs opened = concurrency × (sum of scenarios across all reports).
+# Required, positive integer.
+
+viewsPerSession: 50
+# How many renders each tab completes before exiting. v0.8 called this `numberOfViews`.
+# Required, positive integer.
+
+thinkTimeSec: 15
+# Seconds between renders (per tab). v0.8 called this `thinkTimeSeconds`.
+# Required, non-negative integer.
+
+# ---------- Optional run-level defaults ----------
+
+sessionRestart: 100
+# Full-tab reload every N renders, to mitigate iframe memory leaks in long sessions.
+# Optional, default 100. Set to 0 to disable.
+
+layoutType: "Master"
+# Power BI JS SDK LayoutType. Valid: Master, Custom, MobilePortrait, MobileLandscape.
+# Optional, default "Master".
+
+# ---------- Reports and scenarios ----------
+
+reports:
+  - id: "36621bde-0000-0000-0000-000000000000"
+    # Power BI report ID. Required, must be a GUID. The runner builds the embedUrl as
+    # https://app.powerbi.com/reportEmbed?reportId=<id>&groupId=<workspace>.
+
+    name: "Sales Overview"
+    # Human label only — surfaced in dashboard `perReport` aggregation and JSONL records
+    # for analysis grouping. Required, non-empty string.
+
+    scenarios:
+      # One or more scenarios per report. Each scenario produces `concurrency` browser
+      # tabs. A scenario is a (page, bookmarks, filters) tuple that defines what the
+      # simulated user looks at.
+
+      - page: "ReportSectionAbc123"
+        # Power BI page name (the GUID-suffixed internal name, NOT the display name).
+        # Get it via GET /reports/{id}/pages. Optional — omit to let Power BI pick the
+        # default page.
+
+        bookmarks:
+          - "Bookmark1abc"
+          - "Bookmark2def"
+        # Optional list of bookmark IDs to cycle through during the session. Each render
+        # flips to the next bookmark (round-robin). Omit or leave empty to never apply a
+        # bookmark.
+
+        filters:
+          - table: "Calendar"
+            column: "Year"
+            isSlicer: true
+            values: [2020, 2021, 2019]
+          - table: "Local Area District"
+            column: "LA Name"
+            isSlicer: true
+            values:
+              - "Eastleigh"
+              - "Fareham"
+              - ["East Hampshire", "Winchester", "New Forest"]
+        # Optional filter combinatorics — preserved verbatim from v0.8 semantics.
+        # `isSlicer: true` targets the visual slicer bar; `false` is a report-level filter.
+        # A nested list (last entry above) is one combined multi-select.
+        # The runner cycles through every combination of (filter1 value × filter2 value × …).
+
+      - page: "ReportSectionDef456"
+        bookmarks: ["BookmarkSummary"]
+        filters:
+          - table: "Calendar"
+            column: "Year"
+            isSlicer: true
+            values: [2022, 2023]

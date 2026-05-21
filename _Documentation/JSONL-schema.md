@@ -65,7 +65,7 @@ The first `rendered` event after every page load (including the periodic `sessio
 | `thinkTimeSec` | integer | yes | `thinkTimeSeconds` from config |
 | `errorDetail` | string | only on `event: error` | SDK error detail message |
 | `errorCode` | string | only on `event: error` | SDK error code (e.g., `LoadReportFailed`) |
-| `host_saturated` | boolean | added in v1.0 only | True if the host's resource monitor flagged saturation during this refresh |
+| `host_saturated` | boolean | only set when `true` (v1.0 Stage 3+) | The page polls coordinator `/status` every 5 s for the host saturation flag (set by `resource-monitor/monitor.js` after sustained CPU>90% or RAM>95% for 30 s). When the flag is true at emit time, the field is stamped on the record; otherwise it's omitted (so absence = not saturated). Filter steady-state aggregates with `select(.host_saturated != true)`. |
 
 ## Event semantics
 

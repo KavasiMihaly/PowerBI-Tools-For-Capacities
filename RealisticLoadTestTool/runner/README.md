@@ -1,10 +1,10 @@
-# RealisticLoadTest Runner (v1.0 Stage 1)
+# RealisticLoadTest Runner (v1.0 Stage 2)
 
-Node + Playwright orchestrator that replaces `Run_Load_Test_Only.ps1` + `ChromeWriteBack/` (CefSharp).
+Node + Playwright orchestrator. Connects to the coordinator (Stage 2), launches N Chromium contexts, captures per-page metrics, writes per-instance JSONL files, and POSTs the same records to the coordinator as a backup channel.
 
 ## Why this exists
 
-The v0.7.1 runner used CefSharp via `file://` URLs. Entra rejects `file://` redirect URIs, so MSAL (the only supported auth path in v0.8) can't run there. This runner serves the HTML over `http://localhost`, so MSAL works in every window. As a side effect, it also kills the entire CefSharp dependency (~200MB of unmanaged binaries) and the dual auth path that came with it.
+Replaces `Run_Load_Test_Only.ps1` + `ChromeWriteBack/` (CefSharp, deleted in Stage 1). HTML is served over `http://localhost` so MSAL works in every window — the multi-window auth limitation from v0.8 is gone.
 
 ## Install (one-time)
 
@@ -16,24 +16,29 @@ npx playwright install chromium    # downloads the browser binary, ~150MB
 
 ## Run
 
+Stage 2 requires the coordinator to be running first.
+
 ```powershell
-# 1 instance, headed, default http://localhost:8080
-node run.js
+# Terminal A — coordinator (leave running)
+cd RealisticLoadTestTool/coordinator
+node server.js
 
-# 5 parallel instances against the configured PBIReport.json
+# Terminal B — actual test
+cd RealisticLoadTestTool/runner
 node run.js --concurrency 5
-
-# headless background mode (requires a previously-cached MSAL token in the profile dir)
-node run.js --concurrency 3 --headless
-
-# pick a different port if 8080 is taken (and ALSO add http://localhost:<port> to your Entra app)
-node run.js --port 9000
-
-# override hostname (rare — only if Entra was registered with 127.0.0.1)
-node run.js --host 127.0.0.1
 ```
 
-> **Entra redirect URI must match exactly.** The runner defaults to `http://localhost:8080` because that's what the v0.8 Quick Start told you to register. Entra compares redirect URIs as exact strings (host + port + scheme). Change the port → register the new origin in Entra. Change the host → same. See `MEMORY.md`.
+### Flags
+
+| Flag | Default | Notes |
+|---|---|---|
+| `--concurrency N` | 1 | Number of parallel browser tabs |
+| `--coordinator URL` | `http://localhost:8080` | Coordinator base URL |
+| `--headless` | off | Background mode (needs cached MSAL token in the profile dir) |
+| `--launch-spacing-sec N` | 5 | Delay between window launches |
+| `--no-coordinator-resend` | off | Disable runner's backup `POST /metric` (page-side POSTs still happen) |
+
+> **Entra redirect URI must match the coordinator's exact origin.** Change the coordinator's port → register the new origin in your Entra app. Entra compares as exact strings (host + port + scheme). See `MEMORY.md`.
 
 ## What you get
 
@@ -53,10 +58,9 @@ The first time you run in headed mode, the first browser window will show the "S
 
 For headless runs to work, you must first run **headed at least once** to populate the cache. The runner reuses `.browser-profile/` across runs *only if you point at the same path* (currently it's per-run; future enhancement will allow a shared profile dir).
 
-## Limitations (Stage 1)
+## Limitations (Stage 2)
 
-- **One scenario per run.** The runner reads `RealisticLoadTestTool/PBIReport.json` (single-scenario, multi-instance). Multi-scenario runs (the old subfolder iteration in `Run_Load_Test_Only.ps1`) come back in **Stage 4** via `loadtest.yaml`.
-- **No live aggregation.** Each instance writes its own JSONL; cross-instance dashboards land in **Stage 2** (coordinator).
+- **One scenario per run.** The runner reads `RealisticLoadTestTool/PBIReport.json` (single-scenario, multi-instance). Multi-scenario runs come back in **Stage 4** via `loadtest.yaml`.
 - **No host-saturation flag.** The `host_saturated` field on metric records arrives in **Stage 3** (resource monitor).
 - **No web setup wizard.** Use the in-page Setup picker (when `PBIReport.json` is empty) or edit `PBIReport.json` by hand. Wizard ships in **Stage 5**.
 

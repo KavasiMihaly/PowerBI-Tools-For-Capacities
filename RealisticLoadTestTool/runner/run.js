@@ -1,47 +1,64 @@
 #!/usr/bin/env node
 /*
- * RealisticLoadTest runner (v1.0 Stage 1) — replaces Run_Load_Test_Only.ps1 + CefSharp/ChromeWriteBack.
+ * RealisticLoadTest runner (v1.0 Stage 4).
  *
- * Pipeline:
- *   1. Serve RealisticLoadTestTool/ over http://127.0.0.1:<port> (MSAL-compatible; file:// is rejected by Entra).
- *   2. Launch one persistent Chromium context (shared MSAL token cache across all instances).
- *   3. Open <concurrency> pages, each navigates to /RealisticLoadTest.html.
- *   4. Capture console output; each line that starts with "METRIC " is a JSONL record emitted by the page.
- *   5. Append each record to Test Results/<runId>/<instanceId>.jsonl.
- *   6. Exit when every instance has emitted event:"view_limit_reached" (or the user kills the process).
+ * Two modes:
+ *   • YAML mode  — `--config <path>` (or `./loadtest.yaml` autodiscovered). Reads the
+ *                  scenario manifest, expands to `concurrency × scenarios` tabs, and
+ *                  passes each scenario to the page via `?scenario=<base64-JSON>`.
+ *   • Legacy mode — no YAML present. Opens `--concurrency N` identical tabs that all
+ *                  read `PBIReport.json` (or fall through to the in-page Setup picker).
+ *                  Preserves v0.8 / Stage 2 behaviour unchanged for ad-hoc runs.
+ *
+ * Pipeline (both modes):
+ *   1. Verify the coordinator is reachable (GET /status). If not, refuse to start.
+ *   2. Launch one persistent Chromium context (shared MSAL token cache across all tabs).
+ *   3. Open the resolved number of tabs (see modes above). YAML mode passes per-tab
+ *      scenario config via querystring; legacy mode passes nothing.
+ *   4. Capture console output; each line starting with "METRIC " is a JSONL record.
+ *   5. Append each record to Test Results/<runId>/<instanceId>.jsonl (canonical truth).
+ *   6. Backup POST each record to <coordinator>/metric (the page already POSTs itself).
+ *   7. Exit when every tab emits event:"view_limit_reached" (or user Ctrl+C).
  *
  * Usage:
- *   node run.js                           # 1 instance, headed, http://localhost:8080
- *   node run.js --concurrency 5           # 5 parallel instances
- *   node run.js --headless                # background mode
- *   node run.js --port 9000 --concurrency 3 --headless
- *   node run.js --host localhost          # default; override only if Entra was registered with 127.0.0.1
- *   node run.js --launch-spacing-sec 5    # delay between window launches (default 5s, matches old PowerShell)
+ *   # Terminal A:
+ *   node ../coordinator/server.js
  *
- * IMPORTANT: the host:port the runner serves on MUST exactly match a redirect URI registered
- * on your Entra SPA app — Entra compares as exact strings (host, port, scheme, no trailing /).
- * Defaults match the v0.8 Quick Start (http://localhost:8080) so existing app registrations keep working.
+ *   # Terminal B (YAML mode):
+ *   node run.js --config ../loadtest.yaml
+ *
+ *   # Terminal B (legacy mode):
+ *   node run.js --concurrency 5
+ *
+ * Flags:
+ *   --config <path>         # YAML manifest path. If omitted, autodiscovers ../loadtest.yaml; else legacy mode.
+ *   --concurrency N         # legacy mode only; YAML mode reads concurrency from the manifest. Default 1.
+ *   --coordinator URL       # default http://localhost:8080
+ *   --headless              # background mode (requires a previously-cached MSAL token)
+ *   --launch-spacing-sec N  # delay between tab launches; default 5
+ *   --no-coordinator-resend # disable the runner's backup POST /metric channel
  *
  * Output:
- *   <repo>/Test Results/<runId>/<instanceId>.jsonl   one file per browser tab, one JSON object per line
- *   <repo>/Test Results/<runId>/runner.log           runner-level events (start, stop, errors, completion)
+ *   <repo>/Test Results/<runId>/<instanceId>.jsonl
+ *   <repo>/Test Results/<runId>/runner.log
  *
  * Exit codes:
- *   0 — all instances reached view_limit_reached
- *   1 — runtime error (server failed to start, browser launch failed, etc.)
+ *   0 — all tabs reached view_limit_reached
+ *   1 — runtime error (coordinator unreachable, Chromium failed, auth-config missing, YAML invalid)
  *   2 — user interrupt (SIGINT / Ctrl+C); partial JSONL on disk is still valid
  */
 
 const http = require('http');
+const https = require('https');
 const fs = require('fs');
 const path = require('path');
 const url = require('url');
 
-const TOOL_ROOT = path.resolve(__dirname, '..');                 // …/RealisticLoadTestTool
-const REPO_ROOT = path.resolve(TOOL_ROOT, '..');                 // …/PowerBI-Tools-For-Capacities
+const TOOL_ROOT = path.resolve(__dirname, '..');
+const REPO_ROOT = path.resolve(TOOL_ROOT, '..');
 const RESULTS_ROOT = path.join(REPO_ROOT, 'Test Results');
 
-// ----- arg parsing (no deps) -----
+// ----- arg parsing -----
 function parseArgs(argv) {
   const out = { _: [] };
   for (let i = 0; i < argv.length; i++) {
@@ -57,69 +74,20 @@ function parseArgs(argv) {
   }
   return out;
 }
-
 const args = parseArgs(process.argv.slice(2));
 const CONCURRENCY = parseInt(args.concurrency || args.c || '1', 10);
-const PORT = parseInt(args.port || args.p || '8080', 10);
-// Hostname matters: Entra treats 'localhost' and '127.0.0.1' as different redirect URIs
-// (exact-string match — see MEMORY.md). Default 'localhost' matches the v0.8 Quick Start
-// recommendation so existing Entra app registrations keep working unchanged.
-const HOST = args.host || 'localhost';
+const COORDINATOR_URL = (args.coordinator || 'http://localhost:8080').replace(/\/+$/, '');
 const HEADLESS = !!args.headless;
 const LAUNCH_SPACING_MS = parseInt(args['launch-spacing-sec'] || '5', 10) * 1000;
+const RESEND_TO_COORDINATOR = !args['no-coordinator-resend'];
 
-// ----- minimal static file server -----
-const MIME = {
-  '.html': 'text/html; charset=utf-8',
-  '.js':   'application/javascript; charset=utf-8',
-  '.css':  'text/css; charset=utf-8',
-  '.json': 'application/json; charset=utf-8',
-  '.png':  'image/png',
-  '.jpg':  'image/jpeg',
-  '.svg':  'image/svg+xml',
-  '.ico':  'image/x-icon',
-  '.txt':  'text/plain; charset=utf-8',
-  '.map':  'application/json; charset=utf-8'
-};
-
-function safeJoin(root, requested) {
-  // Prevent path traversal: resolve and verify the result still lives under root.
-  const decoded = decodeURIComponent(requested.split('?')[0]);
-  const trimmed = decoded.replace(/^\/+/, '');
-  const target = path.normalize(path.join(root, trimmed));
-  if (!target.startsWith(root + path.sep) && target !== root) return null;
-  return target;
+// Resolve config mode: explicit --config wins; otherwise autodiscover ../loadtest.yaml; else legacy.
+function resolveConfigPath() {
+  if (args.config) return path.resolve(args.config);
+  const autodiscover = path.join(TOOL_ROOT, 'loadtest.yaml');
+  return fs.existsSync(autodiscover) ? autodiscover : null;
 }
-
-function startServer(rootDir, port, host) {
-  return new Promise((resolve, reject) => {
-    const server = http.createServer((req, res) => {
-      const reqUrl = url.parse(req.url);
-      const target = safeJoin(rootDir, reqUrl.pathname || '/');
-      if (!target) { res.writeHead(403); res.end('Forbidden'); return; }
-
-      fs.stat(target, (err, st) => {
-        if (err) { res.writeHead(404); res.end('Not found: ' + reqUrl.pathname); return; }
-        let filePath = target;
-        if (st.isDirectory()) filePath = path.join(target, 'RealisticLoadTest.html');
-
-        fs.readFile(filePath, (err2, data) => {
-          if (err2) { res.writeHead(404); res.end('Not found: ' + reqUrl.pathname); return; }
-          const ext = path.extname(filePath).toLowerCase();
-          res.writeHead(200, {
-            'Content-Type': MIME[ext] || 'application/octet-stream',
-            'Cache-Control': 'no-store'
-          });
-          res.end(data);
-        });
-      });
-    });
-    server.once('error', reject);
-    // Bind to the loopback host the user configured (default 'localhost'). Same security
-    // stance as the v0.8 manual `python -m http.server` workflow — never reachable off-box.
-    server.listen(port, host, () => resolve(server));
-  });
-}
+const CONFIG_PATH = resolveConfigPath();
 
 // ----- run-id / paths -----
 function makeRunId() {
@@ -131,9 +99,9 @@ function makeRunId() {
 
 function ensureDir(p) { fs.mkdirSync(p, { recursive: true }); }
 
-// ----- per-instance JSONL writer (lazy: keyed by in-page instanceId) -----
+// ----- per-instance JSONL writer -----
 function makeWriterRegistry(runDir) {
-  const writers = new Map(); // instanceId -> { stream, lastEvent }
+  const writers = new Map();
   return {
     write(instanceId, recordObj) {
       let entry = writers.get(instanceId);
@@ -145,19 +113,14 @@ function makeWriterRegistry(runDir) {
       entry.stream.write(JSON.stringify(recordObj) + '\n');
       entry.lastEvent = recordObj.event;
     },
-    isComplete(instanceId) {
-      const e = writers.get(instanceId);
-      return !!e && e.lastEvent === 'view_limit_reached';
-    },
     closeAll() {
       for (const { stream } of writers.values()) stream.end();
       writers.clear();
-    },
-    instanceCount() { return writers.size; }
+    }
   };
 }
 
-// ----- runner-level log file -----
+// ----- runner-level log -----
 function makeRunnerLog(runDir) {
   const file = path.join(runDir, 'runner.log');
   const stream = fs.createWriteStream(file, { flags: 'a' });
@@ -174,13 +137,49 @@ function makeRunnerLog(runDir) {
   };
 }
 
-// ----- pre-flight: verify auth-config.json exists with a real clientId -----
+// ----- coordinator HTTP helpers (no deps) -----
+function httpRequest(method, urlStr, body, log) {
+  return new Promise((resolve, reject) => {
+    const u = url.parse(urlStr);
+    const lib = u.protocol === 'https:' ? https : http;
+    const req = lib.request({
+      method,
+      hostname: u.hostname,
+      port: u.port || (u.protocol === 'https:' ? 443 : 80),
+      path: u.path,
+      headers: body ? { 'Content-Type': 'application/x-ndjson', 'Content-Length': Buffer.byteLength(body) } : {}
+    }, (res) => {
+      const chunks = [];
+      res.on('data', (c) => chunks.push(c));
+      res.on('end', () => resolve({ status: res.statusCode, body: Buffer.concat(chunks).toString('utf8') }));
+    });
+    req.on('error', reject);
+    req.setTimeout(10_000, () => { req.destroy(new Error('timeout')); });
+    if (body) req.write(body);
+    req.end();
+  });
+}
+
+async function probeCoordinator(coordUrl, log) {
+  try {
+    const r = await httpRequest('GET', coordUrl + '/status', null, log);
+    if (r.status !== 200) throw new Error('GET /status returned HTTP ' + r.status);
+    const s = JSON.parse(r.body);
+    log.info(`coordinator reachable: uptime=${s.uptimeSec}s buffered=${s.bufferSize}`);
+    return true;
+  } catch (e) {
+    log.error(`coordinator unreachable at ${coordUrl}: ${e.message}`);
+    log.error(`start it first:  node ${path.relative(process.cwd(), path.join(TOOL_ROOT, 'coordinator', 'server.js'))}`);
+    return false;
+  }
+}
+
+// ----- pre-flight auth check -----
 function preflightAuth(toolRoot, log) {
   const cfgPath = path.join(toolRoot, 'auth-config.json');
   if (!fs.existsSync(cfgPath)) {
     log.error('auth-config.json not found at ' + cfgPath);
     log.error('Copy auth-config.example.json → auth-config.json and fill in clientId + tenantId.');
-    log.error('See _Documentation/MSAL-app-registration.md for one-time Entra setup.');
     return false;
   }
   try {
@@ -198,14 +197,13 @@ function preflightAuth(toolRoot, log) {
 
 // ----- main -----
 (async () => {
-  // Lazy-require playwright so users see a clean error if they haven't run `npm install`.
   let chromium;
   try {
     ({ chromium } = require('playwright'));
   } catch (e) {
     console.error('[runner] Playwright is not installed.');
     console.error('[runner] Run: cd RealisticLoadTestTool/runner && npm install');
-    console.error('[runner] Then: npx playwright install chromium    (downloads the browser binary, ~150MB)');
+    console.error('[runner] Then: npx playwright install chromium');
     process.exit(1);
   }
 
@@ -217,26 +215,39 @@ function preflightAuth(toolRoot, log) {
   log.info(`runId=${runId}`);
   log.info(`tool root=${TOOL_ROOT}`);
   log.info(`results=${runDir}`);
-  log.info(`concurrency=${CONCURRENCY} headless=${HEADLESS} host=${HOST} port=${PORT} launch-spacing=${LAUNCH_SPACING_MS}ms`);
+  log.info(`coordinator=${COORDINATOR_URL} concurrency=${CONCURRENCY} headless=${HEADLESS} launch-spacing=${LAUNCH_SPACING_MS}ms resend=${RESEND_TO_COORDINATOR}`);
 
   if (!preflightAuth(TOOL_ROOT, log)) { log.close(); process.exit(1); }
+  if (!(await probeCoordinator(COORDINATOR_URL, log))) { log.close(); process.exit(1); }
 
-  let server;
-  try {
-    server = await startServer(TOOL_ROOT, PORT, HOST);
-    log.info(`HTTP server listening on http://${HOST}:${PORT} (root: ${TOOL_ROOT})`);
-    log.info(`reminder: this exact origin (http://${HOST}:${PORT}) must be registered as a redirect URI on your Entra SPA app`);
-  } catch (e) {
-    log.error('failed to start HTTP server: ' + e.message);
-    if (e.code === 'EADDRINUSE') {
-      log.error(`port ${PORT} is already in use — pass --port <free-port> AND register that exact origin in Entra`);
+  // ----- resolve tabs (YAML mode vs legacy mode) -----
+  let tabs;   // array of { scenarioPayload | null } — one entry per browser tab to spawn
+  if (CONFIG_PATH) {
+    let validator;
+    try {
+      validator = require(path.resolve(TOOL_ROOT, 'coordinator', 'loadtest-validator'));
+    } catch (e) {
+      log.error('failed to load coordinator/loadtest-validator: ' + e.message);
+      log.close(); process.exit(1);
     }
-    log.close();
-    process.exit(1);
+    let cfg;
+    try {
+      cfg = validator.loadAndValidate(CONFIG_PATH);
+    } catch (e) {
+      log.error('invalid loadtest.yaml at ' + CONFIG_PATH);
+      log.error('  ' + e.message);
+      log.close(); process.exit(1);
+    }
+    const expanded = validator.expandToTabs(cfg);
+    tabs = expanded.map(t => ({ scenarioPayload: t }));
+    log.info(`YAML mode: config=${CONFIG_PATH}`);
+    log.info(`YAML mode: ${cfg.reports.length} report(s), ${expanded.length} tabs (concurrency=${cfg.concurrency})`);
+  } else {
+    tabs = Array.from({ length: CONCURRENCY }, () => ({ scenarioPayload: null }));
+    log.info(`legacy mode: ${CONCURRENCY} tab(s) reading PBIReport.json (no YAML found at ${path.join(TOOL_ROOT, 'loadtest.yaml')})`);
   }
 
   // Persistent context = single shared profile = single MSAL cache shared across all pages.
-  // First sign-in serves all subsequent pages silently.
   const profileDir = path.join(runDir, '.browser-profile');
   ensureDir(profileDir);
 
@@ -250,26 +261,27 @@ function preflightAuth(toolRoot, log) {
   } catch (e) {
     log.error('failed to launch Chromium: ' + e.message);
     log.error('If this is the first run, you may need: npx playwright install chromium');
-    server.close();
     log.close();
     process.exit(1);
   }
 
   const writers = makeWriterRegistry(runDir);
-  const expectedInstances = CONCURRENCY;
-  const targetUrl = `http://${HOST}:${PORT}/RealisticLoadTest.html`;
-
-  // Track every page so we can close cleanly at the end.
+  const expectedInstances = tabs.length;
+  const baseUrl = `${COORDINATOR_URL}/RealisticLoadTest.html`;
   const pages = [];
-  // Track which page-index has finished. We can't key on instanceId until the first METRIC arrives,
-  // so we count completion via writers.isComplete(...) at exit-poll time.
   let completedCount = 0;
+
+  function tabUrlFor(tab) {
+    if (!tab.scenarioPayload) return baseUrl;
+    const b64 = Buffer.from(JSON.stringify(tab.scenarioPayload), 'utf8').toString('base64');
+    return `${baseUrl}?scenario=${encodeURIComponent(b64)}`;
+  }
 
   function attachConsoleCapture(page, pageIdx) {
     page.on('console', (msg) => {
       const text = msg.text();
       if (text.startsWith('METRIC ')) {
-        const json = text.slice(7); // strip 'METRIC ' prefix
+        const json = text.slice(7);
         try {
           const rec = JSON.parse(json);
           if (rec.instanceId == null) {
@@ -277,6 +289,14 @@ function preflightAuth(toolRoot, log) {
             return;
           }
           writers.write(rec.instanceId, rec);
+          // Backup POST to coordinator (page-side already POSTs; this is the safety net for
+          // dropped/throttled fetches). Fire-and-forget, never blocks the test.
+          if (RESEND_TO_COORDINATOR) {
+            httpRequest('POST', COORDINATOR_URL + '/metric', json, log)
+              .catch((e) => { /* coordinator restarted? log occasionally to avoid noise */
+                if (Math.random() < 0.02) log.warn(`coordinator resend failed: ${e.message}`);
+              });
+          }
           if (rec.event === 'view_limit_reached') {
             completedCount++;
             log.info(`page#${pageIdx}: instance ${rec.instanceId} reached view_limit_reached (${completedCount}/${expectedInstances})`);
@@ -295,30 +315,29 @@ function preflightAuth(toolRoot, log) {
     });
   }
 
-  // Launch pages with spacing (matches old PowerShell 5s default — avoids initialization stampede).
-  for (let i = 0; i < CONCURRENCY; i++) {
+  for (let i = 0; i < tabs.length; i++) {
     const page = await context.newPage();
     attachConsoleCapture(page, i);
-    log.info(`page#${i}: opening ${targetUrl}`);
-    page.goto(targetUrl).catch((e) => log.warn(`page#${i} goto error: ${e.message}`));
-    pages.push(page);
-    if (i < CONCURRENCY - 1) {
-      await new Promise(r => setTimeout(r, LAUNCH_SPACING_MS));
+    const tab = tabs[i];
+    const url = tabUrlFor(tab);
+    if (tab.scenarioPayload) {
+      const sp = tab.scenarioPayload;
+      log.info(`page#${i}: opening ${baseUrl} (scenario: report=${sp.reportName} sIdx=${sp.scenarioIndex} slot=${sp.slot})`);
+    } else {
+      log.info(`page#${i}: opening ${url}`);
     }
+    page.goto(url).catch((e) => log.warn(`page#${i} goto error: ${e.message}`));
+    pages.push(page);
+    if (i < tabs.length - 1) await new Promise(r => setTimeout(r, LAUNCH_SPACING_MS));
   }
 
-  // First-run interactive sign-in: in headed mode, the user clicks "Sign in with Microsoft"
-  // in the first window. The MSAL token then caches in the shared profile and subsequent
-  // pages acquire silently. In headless mode, sign-in is impossible — you must have
-  // signed in once via headed mode first (the cache persists in profileDir).
   if (HEADLESS) {
     log.info('headless mode: relies on previously cached MSAL token in ' + profileDir);
-    log.info('if no cached token, all instances will emit auth_failure and exit cleanly');
   } else {
     log.info('headed mode: sign in via the first window to populate the shared MSAL cache');
   }
+  log.info(`live dashboard: ${COORDINATOR_URL}/dashboard`);
 
-  // ----- completion polling -----
   let interrupted = false;
   process.on('SIGINT', () => {
     if (interrupted) return;
@@ -327,7 +346,7 @@ function preflightAuth(toolRoot, log) {
   });
 
   const startMs = Date.now();
-  const HARD_TIMEOUT_MS = 24 * 60 * 60 * 1000; // 24h safety cap
+  const HARD_TIMEOUT_MS = 24 * 60 * 60 * 1000;
   while (!interrupted) {
     if (completedCount >= expectedInstances) { log.info('all instances complete'); break; }
     if (Date.now() - startMs > HARD_TIMEOUT_MS) { log.warn('hard timeout reached (24h)'); break; }
@@ -336,10 +355,9 @@ function preflightAuth(toolRoot, log) {
 
   log.info('closing browser context…');
   try { await context.close(); } catch (e) { log.warn('context.close error: ' + e.message); }
-  log.info('closing HTTP server…');
-  try { server.close(); } catch (e) { /* ignore */ }
   writers.closeAll();
   log.info(`run complete — results in ${runDir}`);
+  log.info(`coordinator dashboard remains live at ${COORDINATOR_URL}/dashboard until you Ctrl+C the coordinator`);
   log.close();
   process.exit(interrupted ? 2 : 0);
 })().catch((e) => {

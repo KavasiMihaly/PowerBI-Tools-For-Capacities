@@ -1,0 +1,227 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg
+   viewBox="0 0 500 568"
+   width="500"
+   height="568"
+   version="1.1"
+   id="svg8"
+   sodipodi:docname="onedaybi_logo_vector_white_text.svg"
+   inkscape:version="1.4.3 (0d15f75, 2025-12-25)"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns:xlink="http://www.w3.org/1999/xlink"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <sodipodi:namedview
+     id="namedview8"
+     pagecolor="#ffffff"
+     bordercolor="#000000"
+     borderopacity="0.25"
+     inkscape:showpageshadow="2"
+     inkscape:pageopacity="0.0"
+     inkscape:pagecheckerboard="0"
+     inkscape:deskcolor="#d1d1d1"
+     inkscape:zoom="1.034331"
+     inkscape:cx="-58.491914"
+     inkscape:cy="532.22808"
+     inkscape:window-width="3440"
+     inkscape:window-height="1377"
+     inkscape:window-x="2552"
+     inkscape:window-y="721"
+     inkscape:window-maximized="1"
+     inkscape:current-layer="svg8" />
+  <defs
+     id="defs5">
+    <linearGradient
+       id="linearGradient19"
+       x1="0"
+       y1="0"
+       x2="0"
+       y2="1">
+      <stop
+         offset="0.31187123"
+         stop-color="#FFFFFF"
+         stop-opacity="0.92"
+         id="stop18" />
+      <stop
+         offset="1"
+         stop-color="#AADCF5"
+         stop-opacity="0.68"
+         id="stop19"
+         style="stop-color:#aadcf5;stop-opacity:0;" />
+    </linearGradient>
+    <linearGradient
+       id="linearGradient17"
+       x1="0"
+       y1="0"
+       x2="0"
+       y2="1">
+      <stop
+         offset="0.45070422"
+         stop-color="#FFFFFF"
+         stop-opacity="0.92"
+         id="stop16" />
+      <stop
+         offset="1"
+         stop-color="#AADCF5"
+         stop-opacity="0.68"
+         id="stop17"
+         style="stop-color:#aadcf5;stop-opacity:0;" />
+    </linearGradient>
+    <linearGradient
+       id="linearGradient11"
+       x1="0"
+       y1="0"
+       x2="0"
+       y2="1">
+      <stop
+         offset="0"
+         stop-color="#FFFFFF"
+         stop-opacity="0.92"
+         id="stop10" />
+      <stop
+         offset="1"
+         stop-color="#AADCF5"
+         stop-opacity="0.68"
+         id="stop11" />
+    </linearGradient>
+    <!-- Circle gradient: warm amber top-left → mauve centre → sky blue bottom-right -->
+    <linearGradient
+       id="circleGrad"
+       x1="108.64"
+       y1="31.44"
+       x2="391.36"
+       y2="388.56001"
+       gradientUnits="userSpaceOnUse"
+       gradientTransform="translate(-0.68241657,4.5659641)">
+      <stop
+         offset="0%"
+         stop-color="#F5A028"
+         id="stop1" />
+      <stop
+         offset="44%"
+         stop-color="#C87092"
+         id="stop2" />
+      <stop
+         offset="0.89999998"
+         stop-color="#34B6EA"
+         id="stop3"
+         style="stop-color:#34b8ea;stop-opacity:1;" />
+    </linearGradient>
+    <!-- Bar fill: white top → icy blue bottom, semi-transparent -->
+    <linearGradient
+       id="barGrad"
+       x1="0"
+       y1="0"
+       x2="0"
+       y2="1">
+      <stop
+         offset="0.37424546"
+         stop-color="#FFFFFF"
+         stop-opacity="0.92"
+         id="stop4" />
+      <stop
+         offset="1"
+         stop-color="#AADCF5"
+         stop-opacity="0.68"
+         id="stop5"
+         style="stop-color:#aadcf5;stop-opacity:0;" />
+    </linearGradient>
+    <!-- Clip to circle so bars don't bleed outside -->
+    <clipPath
+       id="circleClip">
+      <circle
+         cx="250"
+         cy="210"
+         r="186"
+         id="circle5" />
+    </clipPath>
+    <linearGradient
+       inkscape:collect="always"
+       xlink:href="#barGrad"
+       id="linearGradient8"
+       x1="216.03846"
+       y1="220.79402"
+       x2="216.03846"
+       y2="291.44811"
+       gradientTransform="matrix(0.73598007,0,0,1.3587324,4.299851,-8.6084879)"
+       gradientUnits="userSpaceOnUse" />
+    <linearGradient
+       inkscape:collect="always"
+       xlink:href="#linearGradient19"
+       id="linearGradient9"
+       x1="366.22986"
+       y1="157.1909"
+       x2="366.22986"
+       y2="242.20854"
+       gradientTransform="scale(0.61163774,1.6349547)"
+       gradientUnits="userSpaceOnUse" />
+    <linearGradient
+       inkscape:collect="always"
+       xlink:href="#linearGradient17"
+       id="linearGradient10"
+       x1="546.57861"
+       y1="111.03618"
+       x2="546.57861"
+       y2="209.38251"
+       gradientTransform="matrix(0.52874369,0,0,1.8912755,-1.8990029,-3.8903742)"
+       gradientUnits="userSpaceOnUse" />
+  </defs>
+  <!-- ── Gradient circle ── -->
+  <circle
+     cx="249.31758"
+     cy="214.56595"
+     r="186"
+     fill="url(#circleGrad)"
+     id="circle6"
+     style="opacity:1;fill:url(#circleGrad)" />
+  <!-- ── Three ascending bar-chart columns, clipped to circle ── -->
+  <g
+     clip-path="url(#circleClip)"
+     id="g8"
+     transform="matrix(1.1905578,0,0,1.3505486,-46.49353,-135.06658)"
+     style="fill-rule:nonzero">
+    <!-- Left bar  (shortest) -->
+    <rect
+       x="163.29987"
+       y="291.39151"
+       width="42"
+       height="96"
+       fill="url(#barGrad)"
+       id="rect6"
+       style="opacity:0.75;fill:url(#linearGradient8);fill-rule:nonzero"
+       rx="1.5" />
+    <!-- Centre bar -->
+    <rect
+       x="224"
+       y="257"
+       width="42"
+       height="139"
+       fill="url(#barGrad)"
+       id="rect7"
+       style="opacity:0.75;fill:url(#linearGradient9);fill-rule:nonzero"
+       rx="1.5" />
+    <!-- Right bar  (tallest) -->
+    <rect
+       x="287.10101"
+       y="206.10962"
+       width="42"
+       height="186"
+       fill="url(#barGrad)"
+       id="rect8"
+       style="opacity:0.75;mix-blend-mode:normal;fill:url(#linearGradient10);fill-rule:nonzero"
+       rx="1.5" />
+  </g>
+  <!-- ── ONE DAY logotype ── -->
+  <text
+     x="250"
+     y="478"
+     font-family="'Arial Black', 'Helvetica Neue', Arial, sans-serif"
+     font-weight="900"
+     font-size="76"
+     fill="#FFFFFF"
+     text-anchor="middle"
+     letter-spacing="4"
+     id="text8"
+     style="-inkscape-font-specification:'Montserrat, Normal';font-family:Montserrat;font-weight:normal;font-style:normal;font-stretch:normal;font-variant:normal;font-size:76px;font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;letter-spacing:4;text-anchor:middle;fill:#FFFFFF">ONE DAY</text>
+</svg>

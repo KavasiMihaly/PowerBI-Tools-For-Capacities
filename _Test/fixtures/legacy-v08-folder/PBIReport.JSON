@@ -1,0 +1,33 @@
+reportParameters= {
+  "reportUrl": "https://app.powerbi.com/reportEmbed?reportId=ce7dc7f9-51f2-4b8a-9f93-435e2d23ea26&groupId=4353fefd-b750-434d-aa32-1d2fb6d2ca04&autoAuth=true",
+  "sessionRestart": 100,
+//insert report pages here
+"pageName": "ReportSection4a5c2bece009792aceb0",
+//
+//insert bookmarks here
+"bookmarkList": ["Bookmarkb4d346f134e7c6d89de3","Bookmark38183b2f0793137949c4"],
+//
+  "numberOfViews": 20,
+//insert filters here
+  "filters": [
+    {
+        "filterTable":"Calendar",
+        "filterColumn":"Year",
+        "isSlicer":true,
+        "filtersList":[2020,2021,2019]
+    },
+    {
+        "filterTable":"Local Area District",
+        "filterColumn":"LA Name",
+        "isSlicer":true,
+        "filtersList":[
+            "Eastleigh",
+            "Fareham",
+            ["East Hampshire","Winchester","New Forest"]
+        ]
+    }
+],
+//
+"thinkTimeSeconds": 3,
+"projectName": "v08-migration-roundtrip-test"
+};

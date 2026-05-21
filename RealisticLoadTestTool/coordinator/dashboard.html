@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>RealisticLoadTest — Live Dashboard | OneDayBI</title>
+<link rel="stylesheet" href="/lib/onedaybi.css" />
+<style>
+    /* Page-specific overrides only — global brand lives in lib/onedaybi.css. */
+    .last-tick { display: inline-flex; align-items: center; }
+</style>
+</head>
+<body>
+
+<div class="odbi-top-bar"></div>
+
+<header class="odbi-header">
+    <div class="odbi-header__brand">
+        <img src="/lib/onedaybi-logo-dark.svg" alt="OneDayBI" class="odbi-header__logo" />
+        <div>
+            <div class="odbi-header__title">RealisticLoadTest — Live Dashboard
+                <span class="odbi-header__subtitle">Coordinator · v1.0 Stage 3</span>
+            </div>
+        </div>
+    </div>
+    <div class="odbi-header__meta last-tick">
+        <span class="odbi-pulse" id="livePulse"></span>
+        <span id="lastTickInfo">connecting…</span>
+    </div>
+</header>
+
+<div class="odbi-attention" id="saturationBanner">
+    ⚠ Host saturation detected — metrics during this window are flagged as <code>host_saturated:true</code> in JSONL.
+</div>
+
+<main class="odbi-main">
+    <div class="odbi-stat-grid">
+        <div class="odbi-stat odbi-stat--accent">
+            <div class="odbi-stat__label">Active Instances</div>
+            <div class="odbi-stat__value" id="activeInst">—</div>
+            <div class="odbi-stat__sub" id="totalInst"></div>
+        </div>
+        <div class="odbi-stat">
+            <div class="odbi-stat__label">Throughput (renders/sec, 60s)</div>
+            <div class="odbi-stat__value" id="throughput">—</div>
+            <div class="odbi-stat__sub">steady + cold combined</div>
+        </div>
+        <div class="odbi-stat">
+            <div class="odbi-stat__label">Steady-state p50</div>
+            <div class="odbi-stat__value" id="p50">—</div>
+            <div class="odbi-stat__sub" id="steadyCount"></div>
+        </div>
+        <div class="odbi-stat">
+            <div class="odbi-stat__label">Steady-state p95</div>
+            <div class="odbi-stat__value" id="p95">—</div>
+            <div class="odbi-stat__sub">(p99 <span id="p99">—</span>)</div>
+        </div>
+        <div class="odbi-stat odbi-stat--error">
+            <div class="odbi-stat__label">Errors</div>
+            <div class="odbi-stat__value" id="errCount">—</div>
+            <div class="odbi-stat__sub">total observed</div>
+        </div>
+        <div class="odbi-stat">
+            <div class="odbi-stat__label">Coordinator Uptime</div>
+            <div class="odbi-stat__value" id="uptime">—</div>
+            <div class="odbi-stat__sub" id="bufferInfo"></div>
+        </div>
+    </div>
+
+    <div class="odbi-stat-grid" id="hostStatsRow">
+        <div class="odbi-stat" id="cpuStat">
+            <div class="odbi-stat__label">Host CPU</div>
+            <div class="odbi-stat__value" id="cpuValue">—</div>
+            <div class="odbi-stat__sub" id="cpuSub">monitor not running</div>
+        </div>
+        <div class="odbi-stat" id="memStat">
+            <div class="odbi-stat__label">Host RAM</div>
+            <div class="odbi-stat__value" id="memValue">—</div>
+            <div class="odbi-stat__sub" id="memSub">monitor not running</div>
+        </div>
+        <div class="odbi-stat" id="satStat">
+            <div class="odbi-stat__label">Saturation</div>
+            <div class="odbi-stat__value" id="satValue">—</div>
+            <div class="odbi-stat__sub" id="satSub">no recent samples</div>
+        </div>
+    </div>
+
+    <section class="odbi-card">
+        <h2 class="odbi-card__title">Per-report breakdown (steady-state)</h2>
+        <table class="odbi-table" id="perReportTable">
+            <thead><tr>
+                <th>Report ID</th><th class="num">Renders</th><th class="num">p50</th><th class="num">p95</th><th class="num">Mean</th><th class="num">Errors</th>
+            </tr></thead>
+            <tbody><tr><td colspan="6" class="empty">No data yet</td></tr></tbody>
+        </table>
+    </section>
+
+    <section class="odbi-card">
+        <h2 class="odbi-card__title">Instances</h2>
+        <table class="odbi-table" id="instancesTable">
+            <thead><tr>
+                <th>Instance</th><th>Project</th><th>Last event</th><th class="num">View</th><th>Last seen</th><th>Status</th>
+            </tr></thead>
+            <tbody><tr><td colspan="6" class="empty">No instances yet</td></tr></tbody>
+        </table>
+    </section>
+
+    <section class="odbi-card">
+        <h2 class="odbi-card__title">Recent errors (newest first)</h2>
+        <table class="odbi-table" id="errorsTable">
+            <thead><tr>
+                <th>Time</th><th>Instance</th><th>Code</th><th>Detail</th>
+            </tr></thead>
+            <tbody><tr><td colspan="4" class="empty">No errors</td></tr></tbody>
+        </table>
+    </section>
+</main>
+
+<footer class="odbi-footer">
+    <span class="odbi-footer__brand">One Day BI</span> · Polls <code>/status</code> every 2 s ·
+    <a href="https://onedaybi.com" target="_blank" rel="noopener">onedaybi.com</a> ·
+    Power BI Capacity Load Testing
+</footer>
+
+<script>
+const POLL_MS = 2000;
+let lastSuccessAt = 0;
+
+async function tick() {
+    try {
+        const res = await fetch('/status', { cache: 'no-store' });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const s = await res.json();
+        render(s);
+        lastSuccessAt = Date.now();
+        setPulse('live');
+    } catch (e) {
+        const sinceMs = lastSuccessAt ? Date.now() - lastSuccessAt : Infinity;
+        document.getElementById('lastTickInfo').textContent = 'fetch error: ' + e.message;
+        setPulse(sinceMs > 10_000 ? 'dead' : 'stale');
+    }
+}
+
+function setPulse(state) {
+    const el = document.getElementById('livePulse');
+    el.classList.remove('odbi-pulse--stale', 'odbi-pulse--dead');
+    if (state === 'stale') el.classList.add('odbi-pulse--stale');
+    if (state === 'dead')  el.classList.add('odbi-pulse--dead');
+}
+
+function fmtMs(ms) {
+    if (ms == null) return '—';
+    if (ms < 1000) return ms + ' ms';
+    return (ms / 1000).toFixed(2) + ' s';
+}
+
+function fmtUptime(sec) {
+    const h = Math.floor(sec / 3600);
+    const m = Math.floor((sec % 3600) / 60);
+    const s = sec % 60;
+    return (h ? h + 'h ' : '') + (m || h ? m + 'm ' : '') + s + 's';
+}
+
+function fmtAgo(iso) {
+    if (!iso) return '—';
+    const d = Date.now() - new Date(iso).getTime();
+    if (d < 1000) return 'just now';
+    if (d < 60_000) return Math.round(d / 1000) + 's ago';
+    if (d < 3_600_000) return Math.round(d / 60_000) + 'm ago';
+    return Math.round(d / 3_600_000) + 'h ago';
+}
+
+function escape(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+}
+
+function render(s) {
+    document.getElementById('lastTickInfo').textContent = 'last update ' + new Date(s.ts).toLocaleTimeString();
+
+    document.getElementById('activeInst').textContent = s.activeInstanceCount;
+    document.getElementById('totalInst').textContent = 'of ' + s.instances.length + ' total seen';
+    document.getElementById('throughput').textContent = s.aggregate.throughputPerSecLast60s.toFixed(2);
+    document.getElementById('p50').textContent = fmtMs(s.aggregate.steady.p50Ms);
+    document.getElementById('steadyCount').textContent = s.aggregate.totalSteady + ' steady, ' + s.aggregate.totalCold + ' cold-start';
+    document.getElementById('p95').textContent = fmtMs(s.aggregate.steady.p95Ms);
+    document.getElementById('p99').textContent = fmtMs(s.aggregate.steady.p99Ms);
+    document.getElementById('errCount').textContent = s.aggregate.totalErrors;
+    document.getElementById('uptime').textContent = fmtUptime(s.uptimeSec);
+    document.getElementById('bufferInfo').textContent = s.bufferSize + '/' + s.bufferMax + ' buffered (' + s.acceptedTotal + ' accepted, ' + s.droppedTotal + ' dropped)';
+
+    document.getElementById('saturationBanner').classList.toggle('odbi-attention--visible', !!s.hostSaturated);
+
+    // Host stats (Stage 3)
+    const hm = s.hostMetrics;
+    if (hm) {
+        document.getElementById('cpuValue').textContent = hm.cpuPercent + '%';
+        document.getElementById('memValue').textContent = hm.memPercent + '%';
+        const usedMb = hm.totalMemMb - hm.freeMemMb;
+        document.getElementById('cpuSub').textContent = hm.stale ? 'stale (>5s old)' : (hm.secondsAtThreshold ? hm.secondsAtThreshold + 's at threshold' : 'last sample ' + fmtAgo(hm.ts));
+        document.getElementById('memSub').textContent = (usedMb / 1024).toFixed(1) + ' GB / ' + (hm.totalMemMb / 1024).toFixed(1) + ' GB';
+        // Color the value cells
+        const cpuStat = document.getElementById('cpuStat');
+        cpuStat.classList.toggle('odbi-stat--error', hm.cpuPercent > 90);
+        const memStat = document.getElementById('memStat');
+        memStat.classList.toggle('odbi-stat--error', hm.memPercent > 95);
+    } else {
+        document.getElementById('cpuValue').textContent = '—';
+        document.getElementById('memValue').textContent = '—';
+        document.getElementById('cpuSub').textContent = 'monitor not running';
+        document.getElementById('memSub').textContent = 'monitor not running';
+    }
+    const satStat = document.getElementById('satStat');
+    const satVal = document.getElementById('satValue');
+    const satSub = document.getElementById('satSub');
+    if (s.hostSaturated) {
+        satVal.textContent = 'YES';
+        satSub.textContent = 'sustained ≥30s — metrics flagged';
+        satStat.classList.add('odbi-stat--error');
+        satStat.classList.remove('odbi-stat--success');
+    } else if (hm && !hm.stale) {
+        satVal.textContent = 'OK';
+        satSub.textContent = 'within thresholds';
+        satStat.classList.add('odbi-stat--success');
+        satStat.classList.remove('odbi-stat--error');
+    } else {
+        satVal.textContent = '—';
+        satSub.textContent = 'no recent samples';
+        satStat.classList.remove('odbi-stat--error', 'odbi-stat--success');
+    }
+
+    // Per-report
+    const repBody = document.querySelector('#perReportTable tbody');
+    if (!s.perReport.length) {
+        repBody.innerHTML = '<tr><td colspan="6" class="empty">No data yet</td></tr>';
+    } else {
+        repBody.innerHTML = s.perReport.map(r => `
+            <tr>
+                <td><code class="odbi-truncate">${escape(r.reportId)}</code></td>
+                <td class="num">${r.count}</td>
+                <td class="num">${fmtMs(r.p50Ms)}</td>
+                <td class="num">${fmtMs(r.p95Ms)}</td>
+                <td class="num">${fmtMs(r.meanMs)}</td>
+                <td class="num">${r.errors}</td>
+            </tr>`).join('');
+    }
+
+    // Instances
+    const instBody = document.querySelector('#instancesTable tbody');
+    if (!s.instances.length) {
+        instBody.innerHTML = '<tr><td colspan="6" class="empty">No instances yet</td></tr>';
+    } else {
+        instBody.innerHTML = s.instances.map(i => {
+            let badge;
+            if (i.lastEvent === 'view_limit_reached') badge = '<span class="odbi-badge odbi-badge--done">DONE</span>';
+            else if (i.lastEvent === 'error' || i.lastEvent === 'auth_failure') badge = '<span class="odbi-badge odbi-badge--error">' + escape(i.lastEvent) + '</span>';
+            else if (i.active) badge = '<span class="odbi-badge odbi-badge--active">ACTIVE</span>';
+            else badge = '<span class="odbi-badge odbi-badge--idle">IDLE</span>';
+            const view = i.view ? `${i.view.current}/${i.view.target}` : '—';
+            return `<tr>
+                <td><code>${i.instanceId}</code></td>
+                <td>${escape(i.projectName) || '—'}</td>
+                <td>${escape(i.lastEvent) || '—'}</td>
+                <td class="num">${view}</td>
+                <td>${fmtAgo(i.lastSeen)}</td>
+                <td>${badge}</td>
+            </tr>`;
+        }).join('');
+    }
+
+    // Errors
+    const errBody = document.querySelector('#errorsTable tbody');
+    if (!s.recentErrors.length) {
+        errBody.innerHTML = '<tr><td colspan="4" class="empty">No errors</td></tr>';
+    } else {
+        errBody.innerHTML = s.recentErrors.map(e => `
+            <tr>
+                <td>${fmtAgo(e.ts)}</td>
+                <td><code>${escape(e.instanceId)}</code></td>
+                <td>${escape(e.errorCode) || '—'}</td>
+                <td class="odbi-truncate">${escape(e.errorDetail) || '—'}</td>
+            </tr>`).join('');
+    }
+}
+
+tick();
+setInterval(tick, POLL_MS);
+</script>
+</body>
+</html>

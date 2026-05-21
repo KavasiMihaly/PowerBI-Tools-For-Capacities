@@ -1,0 +1,430 @@
+/*
+ * OneDayBI brand stylesheet (v1.0 Stage 2.5)
+ *
+ * Single source of truth for the load-test tool's HTML views. Tokens come from the
+ * brand-guidelines skill (brands/onedaybi.md) — Microsoft-aligned digital palette.
+ * Apply by linking from RealisticLoadTest.html, coordinator/dashboard.html, UserGuide.html
+ * (and Stage 5's Setup.html).
+ *
+ * Pattern: define tokens as CSS custom properties on :root, build component classes from those.
+ * Future palette tweaks are one-line edits at the top.
+ */
+
+/* ============================================================
+ * Brand tokens
+ * ============================================================ */
+:root {
+    /* Colour — primary */
+    --odbi-blue:        #0078d4;   /* Primary brand — Microsoft-aligned, links, CTAs */
+    --odbi-blue-dark:   #106ebe;   /* Hover / active state */
+    --odbi-green:       #10b981;   /* Accent — success, ACTIVE state */
+    --odbi-green-dark:  #059669;
+    --odbi-amber:       #f59e0b;   /* Warning / cold-start label */
+    --odbi-red:         #dc2626;   /* Error */
+    --odbi-red-dark:    #991b1b;
+
+    /* Colour — neutrals */
+    --odbi-dark:        #111827;   /* Primary text / dark surfaces */
+    --odbi-secondary:   #1f2937;   /* Secondary dark */
+    --odbi-gray-700:    #374151;
+    --odbi-gray-600:    #4b5563;   /* Body text */
+    --odbi-gray-500:    #6b7280;   /* Muted text */
+    --odbi-gray-300:    #d1d5db;   /* Borders */
+    --odbi-gray-200:    #e5e7eb;   /* Light borders */
+    --odbi-gray-100:    #f3f4f6;   /* Subtle backgrounds */
+    --odbi-light:       #f9fafb;   /* Page background (light) */
+    --odbi-white:       #ffffff;
+
+    /* Typography */
+    --odbi-font-sans: 'Segoe UI', system-ui, -apple-system, 'Inter', BlinkMacSystemFont, Arial, sans-serif;
+    --odbi-font-mono: 'Cascadia Mono', 'Consolas', 'SF Mono', Menlo, Monaco, monospace;
+
+    /* Layout */
+    --odbi-radius:      6px;
+    --odbi-radius-lg:   10px;
+    --odbi-shadow-sm:   0 1px 2px rgba(17, 24, 39, 0.04), 0 1px 3px rgba(17, 24, 39, 0.06);
+    --odbi-shadow-md:   0 1px 3px rgba(17, 24, 39, 0.06), 0 4px 12px rgba(17, 24, 39, 0.08);
+    --odbi-top-bar-h:   4px;
+}
+
+/* ============================================================
+ * Reset / base
+ * ============================================================ */
+* { box-sizing: border-box; }
+
+html, body {
+    margin: 0; padding: 0;
+    background: var(--odbi-light);
+    color: var(--odbi-gray-700);
+    font-family: var(--odbi-font-sans);
+    font-size: 14px;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3, h4 {
+    color: var(--odbi-dark);
+    font-weight: 600;
+    margin: 0 0 0.5rem 0;
+}
+h1 { font-size: 1.6rem; }
+h2 { font-size: 1.15rem; }
+h3 { font-size: 0.95rem; }
+h4 { font-size: 0.85rem; }
+
+a { color: var(--odbi-blue); text-decoration: none; }
+a:hover { color: var(--odbi-blue-dark); text-decoration: underline; }
+
+code, pre {
+    font-family: var(--odbi-font-mono);
+    font-size: 0.88em;
+}
+code {
+    background: var(--odbi-gray-100);
+    padding: 0.1em 0.4em;
+    border-radius: 4px;
+    color: var(--odbi-secondary);
+}
+pre {
+    background: var(--odbi-gray-100);
+    padding: 1rem;
+    border-radius: var(--odbi-radius);
+    border-left: 3px solid var(--odbi-blue);
+    overflow-x: auto;
+}
+pre code { background: transparent; padding: 0; }
+
+hr {
+    border: 0;
+    border-top: 1px solid var(--odbi-gray-200);
+    margin: 1.5rem 0;
+}
+
+/* ============================================================
+ * Layout primitives
+ * ============================================================ */
+
+/* Thin coloured strip across the top of every page — brand signature. */
+.odbi-top-bar {
+    height: var(--odbi-top-bar-h);
+    background: linear-gradient(90deg, var(--odbi-blue) 0%, var(--odbi-green) 100%);
+    width: 100%;
+}
+
+/* Dark navy header — appears on dashboard and tool pages. Logo + page title. */
+.odbi-header {
+    background: var(--odbi-dark);
+    color: var(--odbi-white);
+    padding: 0.9rem 2rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+}
+.odbi-header__brand {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    min-width: 0;
+}
+.odbi-header__logo {
+    height: 32px;
+    width: auto;
+    display: block;
+}
+.odbi-header__title {
+    color: var(--odbi-white);
+    font-size: 1.05rem;
+    font-weight: 600;
+    margin: 0;
+    line-height: 1.2;
+}
+.odbi-header__subtitle {
+    display: block;
+    font-weight: 400;
+    font-size: 0.78rem;
+    color: var(--odbi-gray-300);
+    margin-top: 0.1rem;
+}
+.odbi-header__meta {
+    font-size: 0.82rem;
+    color: var(--odbi-gray-300);
+    text-align: right;
+}
+
+/* Light header variant for documentation pages (UserGuide). */
+.odbi-header--light {
+    background: var(--odbi-white);
+    color: var(--odbi-dark);
+    border-bottom: 1px solid var(--odbi-gray-200);
+}
+.odbi-header--light .odbi-header__title { color: var(--odbi-dark); }
+.odbi-header--light .odbi-header__subtitle,
+.odbi-header--light .odbi-header__meta { color: var(--odbi-gray-500); }
+
+/* Main content well. */
+.odbi-main {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 1.5rem 2rem;
+}
+.odbi-main--narrow { max-width: 960px; }
+
+/* Footer. */
+.odbi-footer {
+    background: var(--odbi-dark);
+    color: var(--odbi-gray-300);
+    padding: 1.25rem 2rem;
+    margin-top: 2rem;
+    font-size: 0.82rem;
+    text-align: center;
+}
+.odbi-footer a { color: var(--odbi-gray-300); }
+.odbi-footer a:hover { color: var(--odbi-white); }
+.odbi-footer__brand { color: var(--odbi-white); font-weight: 600; }
+
+/* ============================================================
+ * Cards
+ * ============================================================ */
+.odbi-card {
+    background: var(--odbi-white);
+    border: 1px solid var(--odbi-gray-200);
+    border-radius: var(--odbi-radius-lg);
+    padding: 1.25rem 1.5rem;
+    box-shadow: var(--odbi-shadow-sm);
+}
+.odbi-card + .odbi-card { margin-top: 1rem; }
+
+.odbi-card__title {
+    margin: 0 0 0.75rem 0;
+    font-size: 0.95rem;
+    color: var(--odbi-dark);
+}
+
+/* Stat / metric card — used for dashboard tiles. */
+.odbi-stat {
+    background: var(--odbi-white);
+    border: 1px solid var(--odbi-gray-200);
+    border-radius: var(--odbi-radius-lg);
+    padding: 1rem 1.25rem;
+    box-shadow: var(--odbi-shadow-sm);
+}
+.odbi-stat__label {
+    text-transform: uppercase;
+    color: var(--odbi-gray-500);
+    font-size: 0.7rem;
+    letter-spacing: 0.5px;
+    font-weight: 600;
+    margin: 0 0 0.4rem 0;
+}
+.odbi-stat__value {
+    font-size: 1.7rem;
+    font-weight: 600;
+    color: var(--odbi-dark);
+    line-height: 1.1;
+}
+.odbi-stat__sub {
+    color: var(--odbi-gray-500);
+    font-size: 0.78rem;
+    margin-top: 0.25rem;
+}
+.odbi-stat--accent .odbi-stat__value { color: var(--odbi-blue); }
+.odbi-stat--success .odbi-stat__value { color: var(--odbi-green-dark); }
+.odbi-stat--error .odbi-stat__value { color: var(--odbi-red); }
+
+/* Grid for stat cards — auto-fit responsive. */
+.odbi-stat-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+/* ============================================================
+ * Buttons
+ * ============================================================ */
+.odbi-btn {
+    display: inline-block;
+    padding: 0.6rem 1.25rem;
+    font-family: var(--odbi-font-sans);
+    font-size: 0.9rem;
+    font-weight: 600;
+    line-height: 1.2;
+    border: none;
+    border-radius: var(--odbi-radius);
+    cursor: pointer;
+    transition: background 120ms ease;
+}
+.odbi-btn:disabled { opacity: 0.55; cursor: not-allowed; }
+
+.odbi-btn--primary {
+    background: var(--odbi-blue);
+    color: var(--odbi-white);
+}
+.odbi-btn--primary:hover:not(:disabled) { background: var(--odbi-blue-dark); }
+
+.odbi-btn--secondary {
+    background: var(--odbi-white);
+    color: var(--odbi-dark);
+    border: 1px solid var(--odbi-gray-300);
+}
+.odbi-btn--secondary:hover:not(:disabled) { background: var(--odbi-gray-100); }
+
+/* ============================================================
+ * Banners (auth, info, warning, error)
+ * ============================================================ */
+.odbi-banner {
+    padding: 0.85rem 1.25rem;
+    border-radius: var(--odbi-radius);
+    border-left: 4px solid var(--odbi-blue);
+    background: rgba(0, 120, 212, 0.08);
+    color: var(--odbi-secondary);
+    margin: 0 0 1rem 0;
+    font-size: 0.92rem;
+}
+.odbi-banner--success { border-left-color: var(--odbi-green); background: rgba(16, 185, 129, 0.08); }
+.odbi-banner--warn    { border-left-color: var(--odbi-amber); background: rgba(245, 158, 11, 0.10); color: #78350f; }
+.odbi-banner--error   { border-left-color: var(--odbi-red); background: rgba(220, 38, 38, 0.08); color: var(--odbi-red-dark); }
+
+/* Full-width attention bar — used for host saturation alert. */
+.odbi-attention {
+    background: var(--odbi-red);
+    color: var(--odbi-white);
+    padding: 0.7rem 2rem;
+    font-weight: 600;
+    text-align: center;
+    display: none;
+}
+.odbi-attention--visible { display: block; }
+
+/* ============================================================
+ * Status badges
+ * ============================================================ */
+.odbi-badge {
+    display: inline-block;
+    padding: 0.15rem 0.55rem;
+    border-radius: 999px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+.odbi-badge--active  { background: var(--odbi-green); color: var(--odbi-white); }
+.odbi-badge--idle    { background: var(--odbi-gray-300); color: var(--odbi-secondary); }
+.odbi-badge--done    { background: var(--odbi-blue); color: var(--odbi-white); }
+.odbi-badge--error   { background: var(--odbi-red); color: var(--odbi-white); }
+.odbi-badge--warn    { background: var(--odbi-amber); color: var(--odbi-dark); }
+
+/* ============================================================
+ * Tables
+ * ============================================================ */
+.odbi-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.88rem;
+}
+.odbi-table th {
+    text-align: left;
+    padding: 0.55rem 0.75rem;
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--odbi-gray-500);
+    border-bottom: 1px solid var(--odbi-gray-200);
+    background: var(--odbi-light);
+}
+.odbi-table td {
+    padding: 0.55rem 0.75rem;
+    border-bottom: 1px solid var(--odbi-gray-100);
+    color: var(--odbi-gray-700);
+}
+.odbi-table tr:last-child td { border-bottom: 0; }
+.odbi-table .num { text-align: right; font-variant-numeric: tabular-nums; }
+.odbi-table .empty { color: var(--odbi-gray-500); font-style: italic; padding: 0.75rem; }
+
+/* Vertical "label : value" table — used for the in-page metrics panel. */
+.odbi-kv {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.88rem;
+}
+.odbi-kv td {
+    padding: 0.55rem 0.85rem;
+    border-bottom: 1px solid var(--odbi-gray-100);
+}
+.odbi-kv tr:last-child td { border-bottom: 0; }
+.odbi-kv td:first-child {
+    width: 35%;
+    font-weight: 600;
+    color: var(--odbi-secondary);
+    background: var(--odbi-gray-100);
+}
+
+/* ============================================================
+ * Form rows (Setup picker / Setup.html)
+ * ============================================================ */
+.odbi-form-row {
+    display: flex;
+    align-items: center;
+    margin-bottom: 0.75rem;
+    gap: 1rem;
+}
+.odbi-form-row label {
+    width: 200px;
+    font-weight: 600;
+    color: var(--odbi-secondary);
+    font-size: 0.9rem;
+    flex-shrink: 0;
+}
+.odbi-form-row input,
+.odbi-form-row select {
+    flex: 1;
+    padding: 0.5rem 0.7rem;
+    font-family: var(--odbi-font-sans);
+    font-size: 0.92rem;
+    border: 1px solid var(--odbi-gray-300);
+    border-radius: var(--odbi-radius);
+    color: var(--odbi-dark);
+    background: var(--odbi-white);
+}
+.odbi-form-row input:focus,
+.odbi-form-row select:focus {
+    outline: none;
+    border-color: var(--odbi-blue);
+    box-shadow: 0 0 0 3px rgba(0, 120, 212, 0.15);
+}
+.odbi-form-row input:disabled,
+.odbi-form-row select:disabled {
+    background: var(--odbi-gray-100);
+    color: var(--odbi-gray-500);
+    cursor: not-allowed;
+}
+
+/* ============================================================
+ * Utilities
+ * ============================================================ */
+.odbi-muted { color: var(--odbi-gray-500); }
+.odbi-mono  { font-family: var(--odbi-font-mono); font-size: 0.85em; }
+.odbi-truncate {
+    max-width: 280px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Pulse indicator (live polling status). */
+.odbi-pulse {
+    display: inline-block;
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--odbi-green);
+    margin-right: 0.4rem;
+    animation: odbi-pulse 2s infinite;
+}
+.odbi-pulse--stale { background: var(--odbi-amber); animation: none; }
+.odbi-pulse--dead  { background: var(--odbi-red); animation: none; }
+@keyframes odbi-pulse {
+    0%, 100% { opacity: 1; }
+    50%      { opacity: 0.35; }
+}

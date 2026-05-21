@@ -2,127 +2,27 @@
 <html lang="en">
 <head>
     <meta charset="utf-8" />
-    <title>Realistic Load Test v1.0.0-stage1</title>
+    <title>Realistic Load Test v1.0.0-stage4 | OneDayBI</title>
 
+    <link rel="stylesheet" href="lib/onedaybi.css" />
     <style>
-        body {
-            font-family: 'Segoe UI';
-            background: #ecf0f1;
-            padding: 1rem;
-        }
-
-        .header {
-            background: #2c3e50;
-            color: white;
-            padding: 1.5rem;
-            text-align: center;
-            border-radius: 5px;
-            margin-bottom: 1rem;
-        }
-
-        .header h1 {
-            margin: 0;
-            font-size: 2rem;
-            font-weight: 300;
-        }
-
+        /* Page-specific overrides only — global brand lives in lib/onedaybi.css. */
         #embedDiv {
-            border: 3px solid #3498db;
-            border-radius: 8px;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-            margin: 1rem auto;
+            border: 1px solid var(--odbi-gray-200);
+            border-top: 3px solid var(--odbi-blue);
+            border-radius: var(--odbi-radius-lg);
+            box-shadow: var(--odbi-shadow-md);
+            margin: 1rem 0;
             padding: 10px;
-            background: white;
+            background: var(--odbi-white);
+            /* B9 fix: SDK iframe uses height:100%, which only resolves against a definite parent height — min-height alone left the iframe collapsed to ~150px. */
+            height: 80vh;
+            min-height: 600px;
+            box-sizing: border-box;
         }
-
-        .footer {
-            background: #2c3e50;
-            color: white;
-            padding: 1rem;
-            text-align: center;
-            border-radius: 5px;
-            margin-top: 1rem;
-            font-size: 0.9rem;
-        }
-
-        .metrics-panel {
-            background: #fff;
-            padding: 1rem;
-            border-radius: 8px;
-            margin: 1rem 0;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-
-        .metrics-table {
-            width: 100%;
-            border-collapse: collapse;
-        }
-
-        .metrics-table td {
-            padding: 8px;
-            border: 1px solid #ddd;
-        }
-
-        .metrics-table td:first-child {
-            font-weight: 600;
-            background: #2c3e50;
-            color: white;
-            width: 30%;
-        }
-
-        .auth-banner {
-            background: #fff3cd;
-            border-left: 4px solid #ffc107;
-            color: #664d03;
-            padding: 0.75rem 1rem;
-            border-radius: 4px;
-            margin: 0 0 1rem 0;
-            font-size: 0.95rem;
-        }
-
-        .auth-banner.error { background: #f8d7da; border-left-color: #dc3545; color: #842029; }
-
-        .signin-btn {
-            display: inline-block;
-            background: #0078d4;
-            color: white;
-            border: none;
-            padding: 0.75rem 1.5rem;
-            font-size: 1rem;
-            font-family: 'Segoe UI', Arial, sans-serif;
-            border-radius: 4px;
-            cursor: pointer;
-            margin: 0 0 1rem 0;
-        }
-        .signin-btn:hover { background: #106ebe; }
-        .signin-btn:disabled { background: #999; cursor: not-allowed; }
-
-        .setup-panel {
-            background: #fff;
-            padding: 1.5rem 2rem;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            margin: 1rem 0;
-            max-width: 760px;
-        }
-        .setup-panel h2 { margin-top: 0; color: #2c3e50; }
-        .setup-help { color: #555; font-size: 0.9rem; margin-bottom: 1.5rem; }
-        .setup-row { display: flex; align-items: center; margin-bottom: 0.75rem; }
-        .setup-row label { width: 200px; font-weight: 600; }
-        .setup-row select, .setup-row input {
-            flex: 1;
-            padding: 0.5rem;
-            font-family: 'Segoe UI', Arial, sans-serif;
-            font-size: 0.95rem;
-            border: 1px solid #ccc;
-            border-radius: 4px;
-        }
-        .setup-row select:disabled, .setup-row input:disabled {
-            background: #f0f0f0; color: #888;
-        }
-        .setup-error { display: block; color: #842029; background: #f8d7da;
-                       border-left: 4px solid #dc3545; padding: 0.5rem 1rem;
-                       border-radius: 4px; margin-top: 1rem; font-size: 0.9rem; }
+        #embedDiv iframe { width: 100%; height: 100%; border: 0; }
+        .setup-panel { max-width: 760px; }
+        .setup-help { color: var(--odbi-gray-500); font-size: 0.9rem; margin-bottom: 1.5rem; }
     </style>
 
     <!-- Vendored JS libraries (no external CDN required at runtime) -->
@@ -138,8 +38,49 @@
         // ============================================================
         // Realistic Load Test
         // ============================================================
-        const TOOL_VERSION = '1.0.0-stage1';
+        const TOOL_VERSION = '1.0.0-stage4';
         const SCHEMA_VERSION = 1;
+
+        // ---------- Scenario from querystring (v1.0 Stage 4 YAML mode) ----------
+        // If the runner spawned this tab with ?scenario=<b64-JSON>, decode it and project
+        // the YAML-shape scenario onto reportParameters in the shape the rest of the page
+        // already understands. Legacy mode (no querystring) leaves reportParameters as
+        // loaded from PBIReport.json — same as v0.8.
+        (function applyScenarioFromQuery() {
+            const m = /[?&]scenario=([^&#]+)/.exec(window.location.search || '');
+            if (!m) return;
+            let scenario;
+            try {
+                scenario = JSON.parse(atob(decodeURIComponent(m[1])));
+            } catch (e) {
+                console.warn('[scenario] failed to decode ?scenario=:', e.message, '— falling back to PBIReport.json');
+                return;
+            }
+            const url = 'https://app.powerbi.com/reportEmbed' +
+                        '?reportId=' + encodeURIComponent(scenario.reportId) +
+                        '&groupId='  + encodeURIComponent(scenario.workspace) +
+                        '&autoAuth=true';
+            const legacyFilters = (scenario.filters || []).map(f => ({
+                filterTable:  f.table,
+                filterColumn: f.column,
+                isSlicer:     !!f.isSlicer,
+                filtersList:  f.values
+            }));
+            window.reportParameters = {
+                reportUrl:        url,
+                sessionRestart:   scenario.sessionRestart,
+                pageName:         scenario.page || null,
+                bookmarkList:     scenario.bookmarks || [],
+                numberOfViews:    scenario.viewsPerSession,
+                filters:          legacyFilters,
+                thinkTimeSeconds: scenario.thinkTimeSec,
+                projectName:      scenario.project,
+                layoutType:       scenario.layoutType
+            };
+            console.log('[scenario] YAML mode active — report=' + scenario.reportName +
+                        ' scenarioIndex=' + scenario.scenarioIndex + ' slot=' + scenario.slot +
+                        ' views=' + scenario.viewsPerSession + ' filters=' + legacyFilters.length);
+        })();
 
         // ---------- Globals ----------
         const startTime = new Date();
@@ -352,10 +293,29 @@
         }
 
         // ============================================================
+        // Host saturation polling (Stage 3 — B3 / T10)
+        // ============================================================
+        // Polls coordinator /status every 5s for hostSaturated. When true, every metric
+        // record emitted during the saturation window gets stamped host_saturated: true,
+        // so post-run analysis can filter out windows where the host was the bottleneck.
+        let hostSaturated = false;
+        async function pollHostSaturation() {
+            try {
+                const res = await fetch('/status', { cache: 'no-store' });
+                if (!res.ok) return;
+                const s = await res.json();
+                hostSaturated = !!s.hostSaturated;
+            } catch (e) { /* coordinator off — leave hostSaturated as last-known */ }
+        }
+        // Fire-and-forget at boot; refresh every 5s (saturation window is 30s, so 5s polling is plenty).
+        pollHostSaturation();
+        setInterval(pollHostSaturation, 5000);
+
+        // ============================================================
         // Metric emission (JSONL)
         // ============================================================
         function emitMetric(extras) {
-            const metric = Object.assign({
+            const base = {
                 ts: new Date().toISOString(),
                 runId,
                 instanceId: instanceID,
@@ -368,12 +328,26 @@
                 slicers: filterValue.slicers,
                 view: { current: loadCounter, target: numberOfViews },
                 thinkTimeSec: thinkTimeSeconds
-            }, extras || {});
+            };
+            const metric = Object.assign(base, extras || {});
+            // Stage 3: stamp host_saturated when the host monitor is reporting overload.
+            // Polled in the background (every 5s) — never blocks emission.
+            if (hostSaturated) metric.host_saturated = true;
             const json = JSON.stringify(metric);
-            // Single channel: console.log with the 'METRIC ' prefix. The runner (runner/run.js)
-            // captures these via Playwright's page.on('console') and writes them to <instanceId>.jsonl.
-            // Also visible in DevTools when running manually in a normal browser tab.
+            // Channel 1: console.log('METRIC ...') — captured by the Playwright runner via
+            // page.on('console') and written to <instanceId>.jsonl on disk. Also visible in DevTools.
             console.log('METRIC ' + json);
+            // Channel 2 (Stage 2+): POST to coordinator for live dashboard aggregation.
+            // Same-origin fetch; coordinator URL is implicit (same host:port the page is served from).
+            // Uses fetch().catch(noop) so a missing/down coordinator never blocks the test.
+            try {
+                fetch('/metric', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-ndjson' },
+                    body: json,
+                    keepalive: true   // survives the page unload that fires on sessionRestart
+                }).catch(() => { /* coordinator not running — channel 1 still has it */ });
+            } catch (e) { /* fetch unavailable (very old browser) */ }
             updateMetricsTable(metric);
             return metric;
         }
@@ -650,7 +624,7 @@
             btn.textContent = 'Sign in with Microsoft';
             const banner = document.getElementById('authBanner');
             if (banner) {
-                banner.classList.remove('error');
+                banner.classList.remove('odbi-banner--error');
                 banner.style.display = 'block';
                 banner.textContent = 'Click "Sign in with Microsoft" below to authenticate. ' +
                                      'After the first sign-in, the token is cached and future page loads are silent.';
@@ -683,7 +657,7 @@
         function showAuthError(msg) {
             const el = document.getElementById('authBanner');
             if (!el) return;
-            el.classList.add('error');
+            el.classList.add('odbi-banner--error');
             el.style.display = 'block';
             el.textContent = msg;
         }
@@ -697,64 +671,79 @@
 </head>
 
 <body>
-    <header class="header">
-        <h1>Realistic Load Test Tool</h1>
+
+    <div class="odbi-top-bar"></div>
+
+    <header class="odbi-header">
+        <div class="odbi-header__brand">
+            <img src="lib/onedaybi-logo-dark.svg" alt="OneDayBI" class="odbi-header__logo" />
+            <div>
+                <div class="odbi-header__title">Realistic Load Test
+                    <span class="odbi-header__subtitle">Power BI capacity load tester · v1.0 Stage 2.5</span>
+                </div>
+            </div>
+        </div>
     </header>
 
-    <div id="authBanner" class="auth-banner" style="display: none;"></div>
-    <button id="signinBtn" class="signin-btn" type="button" style="display: none;">Sign in with Microsoft</button>
+    <main class="odbi-main">
 
-    <div id="setupPanel" class="setup-panel" style="display: none;">
-        <h2>Setup Load Test</h2>
-        <p class="setup-help">No <code>reportUrl</code> configured in <code>PBIReport.json</code> — pick a workspace and report below to run an ad-hoc test. For repeatable scenarios with filters, slicers, and bookmarks, use <code>Setup_Load_Test.ps1</code> (writes a reusable subfolder).</p>
+        <div id="authBanner" class="odbi-banner" style="display: none;"></div>
+        <button id="signinBtn" class="odbi-btn odbi-btn--primary" type="button" style="display: none;">Sign in with Microsoft</button>
 
-        <div class="setup-row">
-            <label for="workspaceSelect">Workspace:</label>
-            <select id="workspaceSelect" disabled><option>Loading workspaces…</option></select>
+        <div id="setupPanel" class="odbi-card setup-panel" style="display: none;">
+            <h2 class="odbi-card__title">Setup Load Test</h2>
+            <p class="setup-help">No <code>reportUrl</code> configured in <code>PBIReport.json</code> — pick a workspace and report below to run an ad-hoc test. For repeatable scenarios with filters, slicers, and bookmarks, use <code>Setup_Load_Test.ps1</code> (writes a reusable subfolder).</p>
+
+            <div class="odbi-form-row">
+                <label for="workspaceSelect">Workspace:</label>
+                <select id="workspaceSelect" disabled><option>Loading workspaces…</option></select>
+            </div>
+            <div class="odbi-form-row">
+                <label for="reportSelect">Report:</label>
+                <select id="reportSelect" disabled><option>Pick a workspace first</option></select>
+            </div>
+            <div class="odbi-form-row">
+                <label for="viewsInput">Number of views:</label>
+                <input type="number" id="viewsInput" value="10" min="1" max="100000" />
+            </div>
+            <div class="odbi-form-row">
+                <label for="thinkTimeInput">Think time (seconds):</label>
+                <input type="number" id="thinkTimeInput" value="3" min="0" max="600" />
+            </div>
+            <div class="odbi-form-row">
+                <label for="projectInput">Project name:</label>
+                <input type="text" id="projectInput" value="ad-hoc" />
+            </div>
+            <button id="startTestBtn" class="odbi-btn odbi-btn--primary" type="button" disabled>Start Test</button>
+            <div id="setupError" class="odbi-banner odbi-banner--error" style="display: none; margin-top: 1rem;"></div>
         </div>
-        <div class="setup-row">
-            <label for="reportSelect">Report:</label>
-            <select id="reportSelect" disabled><option>Pick a workspace first</option></select>
-        </div>
-        <div class="setup-row">
-            <label for="viewsInput">Number of views:</label>
-            <input type="number" id="viewsInput" value="10" min="1" max="100000" />
-        </div>
-        <div class="setup-row">
-            <label for="thinkTimeInput">Think time (seconds):</label>
-            <input type="number" id="thinkTimeInput" value="3" min="0" max="600" />
-        </div>
-        <div class="setup-row">
-            <label for="projectInput">Project name:</label>
-            <input type="text" id="projectInput" value="ad-hoc" />
-        </div>
-        <button id="startTestBtn" class="signin-btn" type="button" disabled>Start Test</button>
-        <span id="setupError" class="setup-error" style="display: none;"></span>
-    </div>
 
-    <div class="metrics-panel">
-        <h3>Performance Metrics</h3>
-        <table class="metrics-table">
-            <tr><td>Project Name</td>        <td id="projectNameCell">—</td></tr>
-            <tr><td>Report ID</td>           <td id="reportIdCell">—</td></tr>
-            <tr><td>Page Name</td>           <td id="pageNameCell">—</td></tr>
-            <tr><td>Instance ID</td>         <td id="instanceIdCell">—</td></tr>
-            <tr><td>Last Event</td>          <td id="eventCell">—</td></tr>
-            <tr><td>Completed Refreshes</td> <td id="refreshCounterCell">0/0</td></tr>
-            <tr><td>Current Refresh</td>     <td id="currentDurationCell">—</td></tr>
-            <tr><td>Total Runtime</td>       <td id="totalTimeCell">0:00:00</td></tr>
-            <tr><td>Active Bookmark</td>     <td id="bookmarkCell">—</td></tr>
-            <tr><td>Active Filters / Slicers</td> <td id="filtersCell">—</td></tr>
-        </table>
-    </div>
+        <div class="odbi-card">
+            <h3 class="odbi-card__title">Performance Metrics</h3>
+            <table class="odbi-kv">
+                <tr><td>Project Name</td>            <td id="projectNameCell">—</td></tr>
+                <tr><td>Report ID</td>               <td id="reportIdCell">—</td></tr>
+                <tr><td>Page Name</td>               <td id="pageNameCell">—</td></tr>
+                <tr><td>Instance ID</td>             <td id="instanceIdCell">—</td></tr>
+                <tr><td>Last Event</td>              <td id="eventCell">—</td></tr>
+                <tr><td>Completed Refreshes</td>     <td id="refreshCounterCell">0/0</td></tr>
+                <tr><td>Current Refresh</td>         <td id="currentDurationCell">—</td></tr>
+                <tr><td>Total Runtime</td>           <td id="totalTimeCell">0:00:00</td></tr>
+                <tr><td>Active Bookmark</td>         <td id="bookmarkCell">—</td></tr>
+                <tr><td>Active Filters / Slicers</td><td id="filtersCell">—</td></tr>
+            </table>
+        </div>
 
-    <hr style="width:99%;" />
+        <div id="embedDiv"></div>
 
-    <div id="embedDiv" style="height: 800px; width: 100%; max-width: 1200px;"></div>
+    </main>
 
-    <footer class="footer">
-        Based on PowerBI-Tools-For-Capacities — https://github.com/microsoft/PowerBI-Tools-For-Capacities<br>
-        Further developed by Mihaly Kavasi · Version 1.0.0-stage1
+    <footer class="odbi-footer">
+        <span class="odbi-footer__brand">One Day BI</span> ·
+        Based on <a href="https://github.com/microsoft/PowerBI-Tools-For-Capacities" target="_blank" rel="noopener">PowerBI-Tools-For-Capacities</a> ·
+        Modernized by Mihaly Kavasi · v1.0.0-stage4 ·
+        <a href="https://onedaybi.com" target="_blank" rel="noopener">onedaybi.com</a>
     </footer>
+
 </body>
 </html>
